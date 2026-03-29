@@ -46,6 +46,8 @@ interface PetState {
   // Reminders
   fetchReminders: (petId: string) => Promise<void>;
   createReminder: (petId: string, data: CreateReminderRequest) => Promise<void>;
+  completeReminder: (petId: string, reminderId: string) => Promise<void>;
+  deleteReminder: (petId: string, reminderId: string) => Promise<void>;
 
   // Health Score
   fetchHealthScore: (petId: string) => Promise<void>;
@@ -224,10 +226,13 @@ export const usePetStore = create<PetState>((set, get) => ({
   fetchReminders: async (petId: string) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.get<Reminder[]>(`/pets/${petId}/reminders`);
+      const response = await api.get(`/pets/${petId}/reminders`);
       const reminders = unwrapApiData<Reminder[]>(response.data);
       set((state) => ({
-        reminders: { ...state.reminders, [petId]: Array.isArray(reminders) ? reminders : [] },
+        reminders: {
+          ...state.reminders,
+          [petId]: Array.isArray(reminders) ? reminders : [],
+        },
         isLoading: false,
       }));
     } catch (err) {
@@ -239,7 +244,7 @@ export const usePetStore = create<PetState>((set, get) => ({
   createReminder: async (petId: string, data: CreateReminderRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.post<Reminder>(`/pets/${petId}/reminders`, data);
+      const response = await api.post(`/pets/${petId}/reminders`, data);
       const newReminder = unwrapApiData<Reminder>(response.data);
       set((state) => ({
         reminders: {
@@ -250,6 +255,44 @@ export const usePetStore = create<PetState>((set, get) => ({
       }));
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to create reminder';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  completeReminder: async (petId: string, reminderId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.put(`/pets/${petId}/reminders/${reminderId}/complete`);
+      set((state) => ({
+        reminders: {
+          ...state.reminders,
+          [petId]: (state.reminders[petId] ?? []).map((r) =>
+            r.id === reminderId ? { ...r, isCompleted: true } : r
+          ),
+        },
+        isLoading: false,
+      }));
+    } catch (err) {
+      const message = (err as { message: string }).message ?? 'Failed to complete reminder';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  deleteReminder: async (petId: string, reminderId: string) => {
+    set({ isLoading: true, error: null });
+    try {
+      await api.delete(`/pets/${petId}/reminders/${reminderId}`);
+      set((state) => ({
+        reminders: {
+          ...state.reminders,
+          [petId]: (state.reminders[petId] ?? []).filter((r) => r.id !== reminderId),
+        },
+        isLoading: false,
+      }));
+    } catch (err) {
+      const message = (err as { message: string }).message ?? 'Failed to delete reminder';
       set({ error: message, isLoading: false });
       throw err;
     }

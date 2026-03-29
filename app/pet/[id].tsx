@@ -23,6 +23,7 @@ import { ScreenHeader } from '../../components/ui';
 import { Tabs } from '../../components/ui/Tabs';
 import { usePetStore } from '../../store/petStore';
 import { calculateAge, formatDate, formatPetType } from '../../lib/utils';
+import { ReminderList } from '@/components';
 
 export default function PetDetailScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -32,27 +33,39 @@ export default function PetDetailScreen() {
     healthRecords,
     healthScores,
     diaries,
+    reminders,
     fetchPet,
     fetchHealthRecords,
     fetchDiaries,
+    fetchReminders,
+    completeReminder,
+    deleteReminder,
     deletePet,
     isLoading,
   } = usePetStore();
   const [refreshing, setRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = useState('health');
 
+  const petReminders = reminders[id ?? ''] ?? [];
+
   useEffect(() => {
     if (id) {
       fetchPet(id);
       fetchHealthRecords(id);
       fetchDiaries(id);
+      fetchReminders(id);
     }
-  }, [id, fetchPet, fetchHealthRecords, fetchDiaries]);
+  }, [id, fetchPet, fetchHealthRecords, fetchDiaries, fetchReminders]);
 
   const handleRefresh = async () => {
     if (!id) return;
     setRefreshing(true);
-    await Promise.all([fetchPet(id), fetchHealthRecords(id), fetchDiaries(id)]);
+    await Promise.all([
+      fetchPet(id),
+      fetchHealthRecords(id),
+      fetchDiaries(id),
+      fetchReminders(id), // ADD THIS
+    ]);
     setRefreshing(false);
   };
 
@@ -189,8 +202,9 @@ export default function PetDetailScreen() {
           <View style={styles.tabsContainer}>
             <Tabs
               tabs={[
-                { key: 'health', label: 'Health Timeline' },
-                { key: 'diary', label: 'Pet Diary' },
+                { key: 'health', label: 'Health' },
+                { key: 'diary', label: 'Diary' },
+                { key: 'reminders', label: `Reminders${petReminders.filter(r => !r.isCompleted).length > 0 ? ` (${petReminders.filter(r => !r.isCompleted).length})` : ''}` },
               ]}
               activeTab={activeTab}
               onTabChange={setActiveTab}
@@ -227,6 +241,26 @@ export default function PetDetailScreen() {
                 </TouchableOpacity>
               </View>
               <DiaryTimeline diaries={petDiaries} petId={id} />
+            </View>
+          )}
+
+          {activeTab === 'reminders' && (
+            <View style={styles.tabContent}>
+              <View style={styles.sectionHeader}>
+                <Text style={styles.sectionTitle}>Reminders</Text>
+                <TouchableOpacity onPress={() => router.push(`/pet/${id}/reminder/add`)}>
+                  <View style={styles.addRecordRow}>
+                    <Plus size={14} color={Colors.primary} />
+                    <Text style={styles.addRecord}>Add Reminder</Text>
+                  </View>
+                </TouchableOpacity>
+              </View>
+              <ReminderList
+                reminders={petReminders}
+                petId={id}
+                onComplete={completeReminder}
+                onDelete={deleteReminder}
+              />
             </View>
           )}
         </View>

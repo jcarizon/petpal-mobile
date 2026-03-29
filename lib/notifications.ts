@@ -3,6 +3,7 @@ import * as Device from 'expo-device';
 import { Platform } from 'react-native';
 import { savePushToken } from './storage';
 import { PushNotificationData } from '../types';
+import api from './api';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -12,6 +13,16 @@ Notifications.setNotificationHandler({
     shouldSetBadge: true,
   }),
 });
+
+// Syncs the token to the backend — call this after login and on app open
+export async function syncPushTokenToBackend(token: string): Promise<void> {
+  try {
+    await api.put('/auth/profile', { expoPushToken: token });
+  } catch (error) {
+    // Non-fatal — token will sync on next open
+    console.warn('Failed to sync push token to backend:', error);
+  }
+}
 
 export async function registerForPushNotifications(): Promise<string | null> {
   if (!Device.isDevice) {
@@ -34,7 +45,12 @@ export async function registerForPushNotifications(): Promise<string | null> {
 
   try {
     const token = (await Notifications.getExpoPushTokenAsync()).data;
+
+    // Save locally
     await savePushToken(token);
+
+    // Sync to backend immediately
+    await syncPushTokenToBackend(token);
 
     if (Platform.OS === 'android') {
       await Notifications.setNotificationChannelAsync('default', {

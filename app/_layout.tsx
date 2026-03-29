@@ -7,12 +7,13 @@ import { SafeAreaProvider, useSafeAreaInsets } from 'react-native-safe-area-cont
 import { useAuthStore } from '../store/authStore';
 import { Colors } from '../constants/colors';
 import { ToastProvider } from '../components/ui';
+import { registerForPushNotifications } from '../lib/notifications';
 
 const queryClient = new QueryClient({
   defaultOptions: {
     queries: {
       retry: 2,
-      staleTime: 5 * 60 * 1000, // 5 minutes
+      staleTime: 5 * 60 * 1000,
     },
   },
 });
@@ -20,9 +21,20 @@ const queryClient = new QueryClient({
 function RootLayoutNav() {
   const { isAuthenticated, autoLogin } = useAuthStore();
 
+  // Initial auto-login attempt on cold start
   useEffect(() => {
     autoLogin();
   }, [autoLogin]);
+
+  // Re-sync push token every time the user becomes authenticated
+  // This covers: first login, app reopen, token rotation
+  useEffect(() => {
+    if (isAuthenticated) {
+      registerForPushNotifications().catch((err) => {
+        console.warn('Push registration failed silently:', err);
+      });
+    }
+  }, [isAuthenticated]);
 
   return (
     <Stack screenOptions={{ headerShown: false }}>

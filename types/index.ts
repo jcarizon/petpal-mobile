@@ -120,12 +120,14 @@ export interface Reminder {
   type: HealthRecordType;
   isCompleted: boolean;
   createdAt: string;
+  description?: string;
 }
 
 export interface CreateReminderRequest {
   title: string;
   dueDate: string;
   type: HealthRecordType;
+  description?: string;
 }
 
 // ─── Services ────────────────────────────────────────────────────────────────
