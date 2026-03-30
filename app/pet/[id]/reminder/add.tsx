@@ -9,12 +9,14 @@ import {
   TouchableOpacity,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
+import * as Notifications from 'expo-notifications';
 import { Colors } from '../../../../constants/colors';
 import { Input } from '../../../../components/ui/Input';
 import { Button } from '../../../../components/ui/Button';
 import { DateTimeField, ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
 import { CreateReminderRequest, HealthRecordType } from '../../../../types';
+import { scheduleLocalNotification } from '../../../../lib/notifications';
 
 const REMINDER_TYPES: Array<{ key: HealthRecordType; emoji: string; label: string }> = [
   { key: 'vaccination', emoji: '💉', label: 'Vaccination' },
@@ -65,10 +67,64 @@ export default function AddReminderScreen() {
         description: description.trim() || undefined,
       };
       await createReminder(id, data);
+
+      // Schedule local notification
+      // If due date is more than 3 days away, notify 3 days before
+      // If due date is more than 1 hour away, notify 1 hour before
+      // Otherwise, notify immediately
+      const threeDaysBefore = new Date(dueDate);
+      threeDaysBefore.setDate(threeDaysBefore.getDate() - 3);
+      
+      const oneHourBefore = new Date(dueDate);
+      oneHourBefore.setHours(oneHourBefore.getHours() - 1);
+      
+      let notificationDate: Date;
+      let notificationMessage: string;
+      
+      if (threeDaysBefore.getTime() > Date.now()) {
+        // More than 3 days away: notify 3 days before
+        notificationDate = threeDaysBefore;
+        notificationMessage = `Your pet has a reminder due in 3 days!`;
+      } else if (oneHourBefore.getTime() > Date.now()) {
+        // More than 1 hour away: notify 1 hour before
+        notificationDate = oneHourBefore;
+        notificationMessage = `Your pet has a reminder due soon!`;
+      } else {
+        // Less than 1 hour away: notify immediately
+        notificationDate = new Date(Date.now() + 1000);
+        notificationMessage = `Your pet has a reminder due very soon!`;
+      }
+      
+      try {
+        // For immediate notifications (less than 1 hour away), schedule for 1 second from now
+        // This ensures the notification shows even when the app is in the foreground
+        if (oneHourBefore.getTime() <= Date.now()) {
+          await Notifications.scheduleNotificationAsync({
+            content: {
+              title: `⏰ Reminder: ${title.trim()}`,
+              body: notificationMessage,
+              data: { type: 'reminder', id },
+              sound: true,
+            },
+            trigger: { seconds: 1 },
+          });
+        } else {
+          await scheduleLocalNotification(
+            `⏰ Reminder: ${title.trim()}`,
+            notificationMessage,
+            { date: notificationDate },
+            { type: 'reminder', id }
+          );
+        }
+      } catch (notifError) {
+        console.error('Failed to schedule notification:', notifError);
+        // Don't fail the reminder creation if notification fails
+      }
+
       showToast({
         type: 'success',
         title: 'Reminder set',
-        message: `You'll be notified 3 days before the due date.`,
+        message: `You'll be notified before the due date.`,
       });
       router.back();
     } catch (error) {
@@ -87,7 +143,7 @@ export default function AddReminderScreen() {
     >
       <ScreenHeader
         title="Set Reminder"
-        subtitle="Get notified 3 days before the due date"
+        subtitle="Get notified before the due date"
       />
       <ScrollView
         contentContainerStyle={styles.content}
@@ -125,13 +181,13 @@ export default function AddReminderScreen() {
         />
 
         <DateTimeField
-          label="Due Date *"
+          label="Due Date & Time *"
           value={dueDate}
           onChange={(value) => {
             setDueDate(value);
             if (errors.dueDate) setErrors((prev) => ({ ...prev, dueDate: undefined }));
           }}
-          mode="date"
+          mode="datetime"
           minimumDate={new Date()}
           error={errors.dueDate}
         />
@@ -148,7 +204,7 @@ export default function AddReminderScreen() {
 
         <View style={styles.reminderNote}>
           <Text style={styles.reminderNoteText}>
-            🔔 A push notification will be sent 3 days before the due date.
+            🔔 A push notification will be sent before the due date.
           </Text>
         </View>
 

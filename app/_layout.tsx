@@ -33,6 +33,9 @@ function RootLayoutNav() {
       registerForPushNotifications().catch((err) => {
         console.warn('Push registration failed silently:', err);
       });
+      registerForPushNotifications().then((token) => {
+        console.log('Push token:', token);
+      });
     }
   }, [isAuthenticated]);
 

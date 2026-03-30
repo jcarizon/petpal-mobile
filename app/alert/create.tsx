@@ -7,15 +7,14 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Image,
   Dimensions,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
-import { Camera, ChevronDown, LocateFixed, Megaphone, PawPrint, Search } from 'lucide-react-native';
+import { ChevronDown, LocateFixed, Megaphone, PawPrint, Search } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
+import { ImageUploader } from '../../components/ui/ImageUploader';
 import { ScreenHeader, useToast } from '../../components/ui';
 import { useCommunityStore } from '../../store/communityStore';
 import { usePetStore } from '../../store/petStore';
@@ -35,7 +34,9 @@ export default function CreateAlertScreen() {
   const [selectedPetId, setSelectedPetId] = useState<string | undefined>();
   const [showPetPicker, setShowPetPicker] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
+  // photoUrl here is always the Cloudinary URL after ImageUploader finishes
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
+  const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; location?: string }>({});
 
   useEffect(() => {
@@ -58,18 +59,6 @@ export default function CreateAlertScreen() {
     return Object.keys(newErrors).length === 0;
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [4, 3],
-      quality: 0.8,
-    });
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUrl(result.assets[0].uri);
-    }
-  };
-
   const handleGetLocation = async () => {
     const coords = await getCurrentLocation();
     if (!coords) {
@@ -85,6 +74,11 @@ export default function CreateAlertScreen() {
     if (!validate()) return;
     if (!coordinates) return;
 
+    if (isUploading) {
+      showToast({ type: 'warning', title: 'Photo still uploading', message: 'Please wait a moment.' });
+      return;
+    }
+
     try {
       const data: CreateAlertRequest = {
         type,
@@ -92,6 +86,7 @@ export default function CreateAlertScreen() {
         description: description.trim() || undefined,
         petId: selectedPetId,
         contactPhone: contactPhone.trim() || undefined,
+        // photoUrl is already a Cloudinary URL — communityStore no longer needs to upload
         photoUrl,
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
@@ -154,17 +149,29 @@ export default function CreateAlertScreen() {
           </View>
         </View>
 
-        {/* Photo picker */}
-        <TouchableOpacity style={styles.photoPicker} onPress={pickImage}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.photo} resizeMode="cover" />
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Camera size={24} color={Colors.textSecondary} />
-              <Text style={styles.photoPlaceholderLabel}>Add Photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {/* Photo uploader — replaces the old manual ImagePicker block */}
+        <View>
+          <Text style={[styles.label, { marginBottom: 8 }]}>Photo (optional)</Text>
+          <ImageUploader
+            value={photoUrl}
+            onChange={setPhotoUrl}
+            folder="alerts"
+            shape="rect"
+            width={Dimensions.get('window').width - 40}
+            height={200}
+            onUploadStart={() => setIsUploading(true)}
+            onUploadEnd={(err) => {
+              setIsUploading(false);
+              if (err) {
+                showToast({
+                  type: 'warning',
+                  title: 'Photo upload failed',
+                  message: 'Alert will be saved without a photo.',
+                });
+              }
+            }}
+          />
+        </View>
 
         <Input
           label="Title *"
@@ -177,7 +184,7 @@ export default function CreateAlertScreen() {
           error={errors.title}
         />
 
-        {/* Pet link — optional, pulls name/breed from the linked Pet record */}
+        {/* Pet link */}
         {pets.length > 0 && (
           <View style={styles.petSection}>
             <Text style={styles.label}>Link a Pet (optional)</Text>
@@ -263,7 +270,7 @@ export default function CreateAlertScreen() {
           title="Create Alert"
           variant="primary"
           onPress={handleSubmit}
-          isLoading={isLoading}
+          isLoading={isLoading || isUploading}
           fullWidth
           size="lg"
           style={styles.submitButton}
@@ -322,32 +329,6 @@ const styles = StyleSheet.create({
   },
   typeLabelFound: {
     color: Colors.success,
-  },
-  photoPicker: {
-    alignSelf: 'stretch',
-    width: '100%',
-  },
-  photo: {
-    width: Dimensions.get('window').width - 40,
-    height: 200,
-    borderRadius: 12,
-  },
-  photoPlaceholder: {
-    width: Dimensions.get('window').width - 40,
-    height: 160,
-    borderRadius: 12,
-    backgroundColor: Colors.neutral100,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-  },
-  photoPlaceholderLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '500',
   },
   locationSection: {
     gap: 8,

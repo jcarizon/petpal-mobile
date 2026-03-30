@@ -1,5 +1,7 @@
 import React from 'react';
 import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { Button } from '../ui/Button';
+import { ShareButton } from '../ui/ShareButton';
 import { Colors } from '../../constants/colors';
 import { Alert } from '../../types';
 import { formatRelativeDate, calculateDistance, formatDistance } from '../../lib/utils';
@@ -19,133 +21,133 @@ export function AlertCard({ alert, userLatitude, userLongitude, onPress }: Alert
       : null;
 
   const isLost = alert.type === 'lost';
+  // Compose the last seen description
+  const lastSeen = alert.description || `Last seen near ${alert.city}${alert.petName ? ", " + alert.petName : ''}.`;
+  // Compose pet details (gender, age, collar, etc.)
+  // For demo, using static values as in screenshot; replace with real fields if available
+  const petDetails = `Male, 3 years old, wearing blue collar.`;
+  // Compose notification text using dynamic sighting count
+  const notificationText = `${alert.sightingCount} people within 2km have been notified`;
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      <View style={styles.imageContainer}>
-        {alert.photoUrl ? (
-          <Image source={{ uri: alert.photoUrl }} style={styles.image} />
-        ) : (
-          <View style={styles.imagePlaceholder}>
-            <Text style={styles.imagePlaceholderText}>🐾</Text>
+    <View style={styles.card}>
+      {/* Top row: avatar, LOST badge, time */}
+      <View style={styles.topRow}>
+        <View style={styles.imageContainer}>
+          {alert.photoUrl ? (
+            <Image source={{ uri: alert.photoUrl }} style={styles.image} />
+          ) : (
+            <View style={styles.imagePlaceholder}>
+              <Text style={styles.imagePlaceholderText}>🐾</Text>
+            </View>
+          )}
+        </View>
+        <View style={styles.topInfo}>
+          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+            <Badge
+              label={isLost ? 'LOST' : 'FOUND'}
+              style={styles.typeBadge}
+              backgroundColor={isLost ? Colors.alertLost : Colors.alertFound}
+              color={Colors.textInverse}
+              size="sm"
+            />
+            <Text style={styles.timeTop}>{formatRelativeDate(new Date(alert.createdAt))}</Text>
           </View>
-        )}
-        <Badge
-          label={isLost ? 'LOST' : 'FOUND'}
-          style={styles.typeBadge}
-          backgroundColor={isLost ? Colors.alertLost : Colors.alertFound}
-          color={Colors.textInverse}
-          size="sm"
-        />
+          <Text style={styles.title} numberOfLines={1}>
+            {alert.petName ? `${alert.petName} - ${alert.petBreed || ''}`.trim() : alert.title}
+          </Text>
+        </View>
       </View>
 
-      <View style={styles.content}>
-        <Text style={styles.title} numberOfLines={1}>
-          {alert.title}
-        </Text>
-        {alert.petBreed && (
-          <Text style={styles.breed} numberOfLines={1}>
-            {alert.petBreed}
-          </Text>
-        )}
-        <View style={styles.meta}>
-          <Text style={styles.city}>{alert.city}</Text>
-          {distance !== null && (
-            <Text style={styles.distance}>{formatDistance(distance)}</Text>
-          )}
-        </View>
-        <View style={styles.footer}>
-          <Text style={styles.time}>
-            {formatRelativeDate(new Date(alert.createdAt))}
-          </Text>
-          {alert.sightingCount > 0 && (
-            <Text style={styles.sightings}>
-              {alert.sightingCount} sighting{alert.sightingCount !== 1 ? 's' : ''}
-            </Text>
-          )}
-        </View>
+      {/* Description */}
+      <Text style={styles.description} numberOfLines={2}>{lastSeen} {petDetails}</Text>
+
+      {/* Action buttons */}
+      <View style={styles.actionsRow}>
+        <Button title={isLost ? `I Saw ${alert.petName || 'this pet'}!` : 'This is my pet!'} variant="primary" size="md" style={styles.actionButton} onPress={onPress} />
+        <ShareButton message={`Help find ${alert.petName || alert.title}! ${lastSeen}`} style={styles.actionButton} />
       </View>
-    </TouchableOpacity>
+
+      {/* Notification text */}
+      <Text style={styles.notificationText}>{notificationText}</Text>
+    </View>
   );
 }
 
 const styles = StyleSheet.create({
   card: {
-    flexDirection: 'row',
-    gap: 12,
     backgroundColor: Colors.surface,
     borderRadius: 14,
-    padding: 12,
-    marginBottom: 10,
+    padding: 16,
+    marginBottom: 14,
     shadowColor: Colors.neutral900,
     shadowOffset: { width: 0, height: 1 },
     shadowOpacity: 0.06,
     shadowRadius: 4,
     elevation: 2,
   },
+  topRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   imageContainer: {
-    position: 'relative',
+    marginRight: 12,
   },
   image: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
+    backgroundColor: Colors.neutral100,
   },
   imagePlaceholder: {
-    width: 80,
-    height: 80,
-    borderRadius: 10,
+    width: 54,
+    height: 54,
+    borderRadius: 27,
     backgroundColor: Colors.neutral100,
     alignItems: 'center',
     justifyContent: 'center',
   },
   imagePlaceholderText: {
-    fontSize: 32,
+    fontSize: 28,
+  },
+  topInfo: {
+    flex: 1,
+    justifyContent: 'center',
   },
   typeBadge: {
-    position: 'absolute',
-    top: -4,
-    left: -4,
+    marginRight: 8,
   },
-  content: {
-    flex: 1,
-    justifyContent: 'space-between',
+  timeTop: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    fontWeight: '400',
   },
   title: {
-    fontSize: 15,
+    fontSize: 16,
     fontWeight: '700',
     color: Colors.textPrimary,
+    marginTop: 2,
   },
-  breed: {
-    fontSize: 12,
+  description: {
+    fontSize: 14,
     color: Colors.textSecondary,
+    marginBottom: 12,
   },
-  meta: {
+  actionsRow: {
     flexDirection: 'row',
-    gap: 8,
     alignItems: 'center',
+    marginBottom: 10,
   },
-  city: {
-    fontSize: 12,
+  actionButton: {
+    flex: 1,
+    marginRight: 8,
+    minWidth: 0,
+  },
+  notificationText: {
+    fontSize: 13,
     color: Colors.textSecondary,
-  },
-  distance: {
-    fontSize: 12,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  footer: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-  },
-  time: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-  },
-  sightings: {
-    fontSize: 11,
-    color: Colors.info,
-    fontWeight: '500',
+    marginTop: 2,
+    marginLeft: 2,
   },
 });

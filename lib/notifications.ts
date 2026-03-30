@@ -4,6 +4,7 @@ import { Platform } from 'react-native';
 import { savePushToken } from './storage';
 import { PushNotificationData } from '../types';
 import api from './api';
+import Constants from 'expo-constants';
 
 // Configure notification behavior
 Notifications.setNotificationHandler({
@@ -44,7 +45,13 @@ export async function registerForPushNotifications(): Promise<string | null> {
   }
 
   try {
-    const token = (await Notifications.getExpoPushTokenAsync()).data;
+    const projectId =
+      Constants.expoConfig?.extra?.eas?.projectId ??
+      Constants.easConfig?.projectId;
+
+    const token = (
+      await Notifications.getExpoPushTokenAsync({ projectId })
+    ).data;
 
     // Save locally
     await savePushToken(token);

@@ -12,10 +12,10 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera } from 'lucide-react-native';
 import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
-import { ScreenHeader } from '../../../../components/ui';
+import { ImageUploader } from '../../../../components/ui/ImageUploader';
+import { ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
 import { DiaryMood, DiaryActivity, CreateDiaryRequest } from '../../../../types';
 
@@ -45,11 +45,14 @@ export default function AddDiaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
   const router = useRouter();
   const { createDiary, isLoading } = usePetStore();
+  const { showToast } = useToast();
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [mood, setMood] = useState<DiaryMood | undefined>(undefined);
   const [activity, setActivity] = useState<DiaryActivity | undefined>(undefined);
+  const [imageUrl, setImageUrl] = useState<string | undefined>();
+  const [isUploading, setIsUploading] = useState(false);
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -60,6 +63,10 @@ export default function AddDiaryScreen() {
       Alert.alert('Error', 'Please enter some content');
       return;
     }
+    if (isUploading) {
+      showToast({ type: 'warning', title: 'Photo still uploading', message: 'Please wait a moment.' });
+      return;
+    }
 
     try {
       const diaryData: CreateDiaryRequest = {
@@ -67,6 +74,7 @@ export default function AddDiaryScreen() {
         content: content.trim(),
         mood,
         activity,
+        imageUrl, // Cloudinary URL or undefined
       };
       await createDiary(id!, diaryData);
       router.back();
@@ -77,16 +85,13 @@ export default function AddDiaryScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScreenHeader
-        title="New Diary Entry"
-        subtitle="Document your pet's day"
-      />
+      <ScreenHeader title="New Diary Entry" subtitle="Document your pet's day" />
       <KeyboardAvoidingView
         behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
         style={styles.keyboardView}
       >
         <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
-          {/* Title Input */}
+          {/* Title */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Title *</Text>
             <TextInput
@@ -99,26 +104,18 @@ export default function AddDiaryScreen() {
             />
           </View>
 
-          {/* Mood Selection */}
+          {/* Mood */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>How is your pet feeling?</Text>
             <View style={styles.optionsGrid}>
               {moodOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
-                  style={[
-                    styles.moodOption,
-                    mood === option.value && styles.moodOptionSelected,
-                  ]}
+                  style={[styles.moodOption, mood === option.value && styles.moodOptionSelected]}
                   onPress={() => setMood(mood === option.value ? undefined : option.value)}
                 >
                   <Text style={styles.moodEmoji}>{option.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.moodLabel,
-                      mood === option.value && styles.moodLabelSelected,
-                    ]}
-                  >
+                  <Text style={[styles.moodLabel, mood === option.value && styles.moodLabelSelected]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -126,25 +123,17 @@ export default function AddDiaryScreen() {
             </View>
           </View>
 
-          {/* Activity Selection */}
+          {/* Activity */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>What did you do today?</Text>
             <View style={styles.activityGrid}>
               {activityOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
-                  style={[
-                    styles.activityOption,
-                    activity === option.value && styles.activityOptionSelected,
-                  ]}
+                  style={[styles.activityOption, activity === option.value && styles.activityOptionSelected]}
                   onPress={() => setActivity(activity === option.value ? undefined : option.value)}
                 >
-                  <Text
-                    style={[
-                      styles.activityLabel,
-                      activity === option.value && styles.activityLabelSelected,
-                    ]}
-                  >
+                  <Text style={[styles.activityLabel, activity === option.value && styles.activityLabelSelected]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -152,7 +141,7 @@ export default function AddDiaryScreen() {
             </View>
           </View>
 
-          {/* Content Input */}
+          {/* Content */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Tell us more *</Text>
             <TextInput
@@ -167,21 +156,35 @@ export default function AddDiaryScreen() {
             />
           </View>
 
-          {/* Photo Placeholder */}
+          {/* Photo — now wired to Cloudinary via ImageUploader */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Add Photo (Optional)</Text>
-            <TouchableOpacity style={styles.photoButton}>
-              <Camera size={24} color={Colors.primary} />
-              <Text style={styles.photoButtonText}>Add Photo</Text>
-            </TouchableOpacity>
+            <ImageUploader
+              value={imageUrl}
+              onChange={setImageUrl}
+              folder="diaries"
+              shape="rect"
+              width="100%"
+              height={160}
+              onUploadStart={() => setIsUploading(true)}
+              onUploadEnd={(err) => {
+                setIsUploading(false);
+                if (err) {
+                  showToast({
+                    type: 'warning',
+                    title: 'Photo upload failed',
+                    message: 'Entry will be saved without a photo.',
+                  });
+                }
+              }}
+            />
           </View>
 
-          {/* Save Button */}
           <View style={styles.buttonContainer}>
             <Button
               title="Save Diary Entry"
               onPress={handleSave}
-              isLoading={isLoading}
+              isLoading={isLoading || isUploading}
               disabled={!title.trim() || !content.trim()}
             />
           </View>
@@ -192,32 +195,11 @@ export default function AddDiaryScreen() {
 }
 
 const styles = StyleSheet.create({
-  container: {
-    flex: 1,
-    backgroundColor: Colors.background,
-  },
-  keyboardView: {
-    flex: 1,
-  },
-  scrollView: {
-    flex: 1,
-    padding: 20,
-  },
-  backButton: {
-    width: 40,
-    height: 40,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  inputGroup: {
-    marginBottom: 20,
-  },
-  label: {
-    fontSize: 14,
-    fontWeight: '600',
-    color: Colors.textPrimary,
-    marginBottom: 8,
-  },
+  container: { flex: 1, backgroundColor: Colors.background },
+  keyboardView: { flex: 1 },
+  scrollView: { flex: 1, padding: 20 },
+  inputGroup: { marginBottom: 20 },
+  label: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 8 },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: 12,
@@ -227,15 +209,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  textArea: {
-    minHeight: 120,
-    paddingTop: 14,
-  },
-  optionsGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  textArea: { minHeight: 120, paddingTop: 14 },
+  optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   moodOption: {
     width: '30%',
     paddingVertical: 12,
@@ -247,26 +222,11 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  moodOptionSelected: {
-    backgroundColor: Colors.primaryBg,
-    borderColor: Colors.primary,
-  },
-  moodEmoji: {
-    fontSize: 24,
-  },
-  moodLabel: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  moodLabelSelected: {
-    color: Colors.primary,
-  },
-  activityGrid: {
-    flexDirection: 'row',
-    flexWrap: 'wrap',
-    gap: 8,
-  },
+  moodOptionSelected: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
+  moodEmoji: { fontSize: 24 },
+  moodLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
+  moodLabelSelected: { color: Colors.primary },
+  activityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
   activityOption: {
     paddingVertical: 10,
     paddingHorizontal: 16,
@@ -275,37 +235,8 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     borderColor: Colors.border,
   },
-  activityOptionSelected: {
-    backgroundColor: Colors.primary,
-    borderColor: Colors.primary,
-  },
-  activityLabel: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  activityLabelSelected: {
-    color: Colors.surface,
-  },
-  photoButton: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 8,
-    backgroundColor: Colors.surface,
-    borderRadius: 12,
-    padding: 16,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-  },
-  photoButtonText: {
-    fontSize: 16,
-    color: Colors.primary,
-    fontWeight: '500',
-  },
-  buttonContainer: {
-    marginTop: 8,
-    marginBottom: 32,
-  },
+  activityOptionSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
+  activityLabel: { fontSize: 14, color: Colors.textSecondary, fontWeight: '500' },
+  activityLabelSelected: { color: Colors.surface },
+  buttonContainer: { marginTop: 8, marginBottom: 32 },
 });
