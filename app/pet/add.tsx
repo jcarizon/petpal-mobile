@@ -7,16 +7,13 @@ import {
   KeyboardAvoidingView,
   Platform,
   TouchableOpacity,
-  Image,
 } from 'react-native';
 import { useRouter, useLocalSearchParams } from 'expo-router';
-import * as ImagePicker from 'expo-image-picker';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, PawPrint } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { DateTimeField, ScreenHeader, useToast } from '../../components/ui';
+import { ImageUploader, DateTimeField, ScreenHeader, useToast } from '../../components/ui';
 import { usePetStore } from '../../store/petStore';
 import { PetType, CreatePetRequest } from '../../types';
 
@@ -42,7 +39,10 @@ export default function AddPetScreen() {
   const [breed, setBreed] = useState('');
   const [birthDate, setBirthDate] = useState<Date | null>(null);
   const [weight, setWeight] = useState('');
+  // photoUrl is set to local URI immediately on pick, then replaced with
+  // the Cloudinary URL once ImageUploader finishes uploading.
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
+  const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<{ name?: string; birthDate?: string; weight?: string }>({});
 
   const validate = (): boolean => {
@@ -52,7 +52,6 @@ export default function AddPetScreen() {
     } else if (name.trim().length < 2) {
       newErrors.name = 'Name should be at least 2 characters';
     }
-
     if (weight) {
       const parsedWeight = parseFloat(weight);
       if (isNaN(parsedWeight) || parsedWeight <= 0) {
@@ -61,31 +60,24 @@ export default function AddPetScreen() {
         newErrors.weight = 'Weight looks too high. Check value in kg';
       }
     }
-
     if (birthDate && birthDate.getTime() > Date.now()) {
       newErrors.birthDate = 'Birth date cannot be in the future';
     }
-
     setErrors(newErrors);
     return Object.keys(newErrors).length === 0;
   };
 
-  const pickImage = async () => {
-    const result = await ImagePicker.launchImageLibraryAsync({
-      mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: [1, 1],
-      quality: 0.8,
-    });
-
-    if (!result.canceled && result.assets[0]) {
-      setPhotoUrl(result.assets[0].uri);
-      // TODO: Upload to Cloudinary and use returned URL
-    }
-  };
-
   const handleSubmit = async () => {
     if (!validate()) return;
+
+    if (isUploading) {
+      showToast({
+        type: 'warning',
+        title: 'Photo still uploading',
+        message: 'Please wait a moment before saving.',
+      });
+      return;
+    }
 
     try {
       const data: CreatePetRequest = {
@@ -94,6 +86,7 @@ export default function AddPetScreen() {
         breed: breed.trim() || undefined,
         birthDate: birthDate ? birthDate.toISOString().slice(0, 10) : undefined,
         weight: weight ? parseFloat(weight) : undefined,
+        // photoUrl is already a Cloudinary URL at this point (upload happened in ImageUploader)
         photoUrl,
       };
 
@@ -102,10 +95,13 @@ export default function AddPetScreen() {
       } else {
         await createPet(data);
       }
+
       showToast({
         type: 'success',
         title: isEdit ? 'Pet updated' : 'Pet added',
-        message: isEdit ? 'Your pet profile was updated successfully.' : 'Your pet profile is ready.',
+        message: isEdit
+          ? 'Your pet profile was updated successfully.'
+          : 'Your pet profile is ready.',
       });
       router.back();
     } catch (error) {
@@ -124,24 +120,39 @@ export default function AddPetScreen() {
     >
       <ScreenHeader
         title={isEdit ? 'Edit Pet' : 'Add Pet'}
-        subtitle={isEdit ? 'Update your pet details and health profile' : 'Create a pet profile to track health and reminders'}
+        subtitle={
+          isEdit
+            ? 'Update your pet details and health profile'
+            : 'Create a pet profile to track health and reminders'
+        }
       />
       <ScrollView
         contentContainerStyle={styles.content}
         keyboardShouldPersistTaps="handled"
         showsVerticalScrollIndicator={false}
       >
-        {/* Photo picker */}
-        <TouchableOpacity style={styles.photoPicker} onPress={pickImage}>
-          {photoUrl ? (
-            <Image source={{ uri: photoUrl }} style={styles.photo} />
-          ) : (
-            <View style={styles.photoPlaceholder}>
-              <Camera size={24} color={Colors.textSecondary} />
-              <Text style={styles.photoPlaceholderLabel}>Add Photo</Text>
-            </View>
-          )}
-        </TouchableOpacity>
+        {/* Pet photo — pick & upload handled by ImageUploader */}
+        <View style={styles.photoRow}>
+          <ImageUploader
+            value={photoUrl}
+            onChange={setPhotoUrl}
+            folder="pets"
+            shape="circle"
+            width={100}
+            height={100}
+            onUploadStart={() => setIsUploading(true)}
+            onUploadEnd={(err) => {
+              setIsUploading(false);
+              if (err) {
+                showToast({
+                  type: 'warning',
+                  title: 'Photo upload failed',
+                  message: 'Your pet will be saved without a photo.',
+                });
+              }
+            }}
+          />
+        </View>
 
         {/* Pet type selector */}
         <View style={styles.typeSection}>
@@ -208,7 +219,7 @@ export default function AddPetScreen() {
           title={isEdit ? 'Save Changes' : 'Add Pet'}
           variant="primary"
           onPress={handleSubmit}
-          isLoading={isLoading}
+          isLoading={isLoading || isUploading}
           fullWidth
           size="lg"
           style={styles.submitButton}
@@ -227,34 +238,9 @@ const styles = StyleSheet.create({
     padding: 20,
     gap: 16,
   },
-  photoPicker: {
+  photoRow: {
     alignSelf: 'center',
     marginBottom: 8,
-  },
-  photo: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-  },
-  photoPlaceholder: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    backgroundColor: Colors.neutral100,
-    borderWidth: 2,
-    borderColor: Colors.border,
-    borderStyle: 'dashed',
-    alignItems: 'center',
-    justifyContent: 'center',
-    gap: 4,
-  },
-  photoPlaceholderText: {
-    fontSize: 0,
-  },
-  photoPlaceholderLabel: {
-    fontSize: 11,
-    color: Colors.textSecondary,
-    fontWeight: '500',
   },
   typeSection: {
     gap: 8,
