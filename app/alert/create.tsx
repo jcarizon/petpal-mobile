@@ -14,8 +14,7 @@ import { ChevronDown, LocateFixed, Megaphone, PawPrint, Search } from 'lucide-re
 import { Colors } from '../../constants/colors';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
-import { ImageUploader } from '../../components/ui/ImageUploader';
-import { ScreenHeader, useToast } from '../../components/ui';
+import { ImageUploader, ScreenHeader, useToast } from '../../components/ui';
 import { useCommunityStore } from '../../store/communityStore';
 import { usePetStore } from '../../store/petStore';
 import { useLocation } from '../../hooks/useLocation';
@@ -34,7 +33,8 @@ export default function CreateAlertScreen() {
   const [selectedPetId, setSelectedPetId] = useState<string | undefined>();
   const [showPetPicker, setShowPetPicker] = useState(false);
   const [contactPhone, setContactPhone] = useState('');
-  // photoUrl here is always the Cloudinary URL after ImageUploader finishes
+  // photoUrl is set to local URI immediately on pick, then replaced with
+  // the Cloudinary URL once ImageUploader finishes uploading.
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; location?: string }>({});
@@ -75,7 +75,11 @@ export default function CreateAlertScreen() {
     if (!coordinates) return;
 
     if (isUploading) {
-      showToast({ type: 'warning', title: 'Photo still uploading', message: 'Please wait a moment.' });
+      showToast({
+        type: 'warning',
+        title: 'Photo still uploading',
+        message: 'Please wait a moment before posting.',
+      });
       return;
     }
 
@@ -86,7 +90,8 @@ export default function CreateAlertScreen() {
         description: description.trim() || undefined,
         petId: selectedPetId,
         contactPhone: contactPhone.trim() || undefined,
-        // photoUrl is already a Cloudinary URL — communityStore no longer needs to upload
+        // photoUrl is already a Cloudinary URL by the time we reach here.
+        // ImageUploader handles the actual upload before calling onChange.
         photoUrl,
         latitude: coordinates.latitude,
         longitude: coordinates.longitude,
@@ -149,7 +154,7 @@ export default function CreateAlertScreen() {
           </View>
         </View>
 
-        {/* Photo uploader — replaces the old manual ImagePicker block */}
+        {/* Alert photo — pick & upload handled by ImageUploader */}
         <View>
           <Text style={[styles.label, { marginBottom: 8 }]}>Photo (optional)</Text>
           <ImageUploader
@@ -184,7 +189,7 @@ export default function CreateAlertScreen() {
           error={errors.title}
         />
 
-        {/* Pet link */}
+        {/* Link a pet (optional) */}
         {pets.length > 0 && (
           <View style={styles.petSection}>
             <Text style={styles.label}>Link a Pet (optional)</Text>
@@ -195,7 +200,9 @@ export default function CreateAlertScreen() {
             >
               <PawPrint size={16} color={selectedPet ? Colors.primary : Colors.textSecondary} />
               <Text style={[styles.petPickerText, selectedPet && styles.petPickerTextSelected]}>
-                {selectedPet ? `${selectedPet.name}${selectedPet.breed ? ` · ${selectedPet.breed}` : ''}` : 'Select one of your pets…'}
+                {selectedPet
+                  ? `${selectedPet.name}${selectedPet.breed ? ` · ${selectedPet.breed}` : ''}`
+                  : 'Select one of your pets…'}
               </Text>
               <ChevronDown size={16} color={Colors.textSecondary} />
             </TouchableOpacity>
@@ -213,8 +220,15 @@ export default function CreateAlertScreen() {
                     style={[styles.petOption, selectedPetId === pet.id && styles.petOptionSelected]}
                     onPress={() => { setSelectedPetId(pet.id); setShowPetPicker(false); }}
                   >
-                    <Text style={[styles.petOptionText, selectedPetId === pet.id && styles.petOptionTextSelected]}>
-                      {pet.name}{pet.breed ? ` · ${pet.breed}` : ''}{pet.species ? ` (${pet.species})` : ''}
+                    <Text
+                      style={[
+                        styles.petOptionText,
+                        selectedPetId === pet.id && styles.petOptionTextSelected,
+                      ]}
+                    >
+                      {pet.name}
+                      {pet.breed ? ` · ${pet.breed}` : ''}
+                      {pet.species ? ` (${pet.species})` : ''}
                     </Text>
                   </TouchableOpacity>
                 ))}
@@ -330,35 +344,6 @@ const styles = StyleSheet.create({
   typeLabelFound: {
     color: Colors.success,
   },
-  locationSection: {
-    gap: 8,
-  },
-  locationSet: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    backgroundColor: Colors.primaryBg,
-    padding: 12,
-    borderRadius: 10,
-  },
-  locationText: {
-    fontSize: 13,
-    color: Colors.primary,
-    flex: 1,
-    marginRight: 8,
-  },
-  updateLocation: {
-    fontSize: 13,
-    color: Colors.primary,
-    fontWeight: '700',
-  },
-  fieldError: {
-    fontSize: 12,
-    color: Colors.error,
-  },
-  submitButton: {
-    marginTop: 8,
-  },
   petSection: {
     gap: 8,
   },
@@ -405,5 +390,34 @@ const styles = StyleSheet.create({
   petOptionTextSelected: {
     color: Colors.primary,
     fontWeight: '600',
+  },
+  locationSection: {
+    gap: 8,
+  },
+  locationSet: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    backgroundColor: Colors.primaryBg,
+    padding: 12,
+    borderRadius: 10,
+  },
+  locationText: {
+    fontSize: 13,
+    color: Colors.primary,
+    flex: 1,
+    marginRight: 8,
+  },
+  updateLocation: {
+    fontSize: 13,
+    color: Colors.primary,
+    fontWeight: '700',
+  },
+  fieldError: {
+    fontSize: 12,
+    color: Colors.error,
+  },
+  submitButton: {
+    marginTop: 8,
   },
 });

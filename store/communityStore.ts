@@ -23,27 +23,20 @@ type ApiAlert = {
   status?: string;
   title: string;
   description?: string;
-  // Photo — stored as photoUrl in the DB, kept flexible
   photoUrl?: string;
   imageUrl?: string;
-  // Contact — stored as contactPhone per lostFoundAlertSchema
   contactPhone?: string;
-  // Location — stored as lastSeenLatitude/Longitude/Address per schema
   latitude?: number;
   longitude?: number;
   city?: string;
   lastSeenLatitude?: number;
   lastSeenLongitude?: number;
   lastSeenAddress?: string;
-  // Sighting count — Prisma _count.sightings when included, or flat sightingCount
   sightingCount?: number;
   _count?: { sightings?: number };
-  // Timestamps
   createdAt: string;
   updatedAt: string;
-  // Relations
   user?: { id: string; name: string; avatarUrl?: string };
-  // pet relation — getAlert includes `pet: true` (the linked Pet record)
   pet?: {
     id: string;
     name?: string;
@@ -51,7 +44,6 @@ type ApiAlert = {
     species?: string;
     photoUrl?: string;
   } | null;
-  // sightings may be embedded on detail fetch
   sightings?: ApiSighting[];
 };
 
@@ -63,20 +55,14 @@ const normalizeAlert = (a: ApiAlert): Alert => ({
   status: (a.status?.toLowerCase() ?? 'active') as Alert['status'],
   title: a.title,
   description: a.description,
-  // Photo: stored as photoUrl on the alert record
   photoUrl: a.photoUrl ?? a.imageUrl ?? a.pet?.photoUrl,
-  // Pet info comes from the related Pet record on detail fetch,
-  // or may be absent on list fetch (getAlerts doesn't include pet)
   petName: a.pet?.name,
   petBreed: a.pet?.breed,
   petSpecies: a.pet?.species,
-  // Contact: stored as contactPhone per lostFoundAlertSchema
   userPhone: a.contactPhone,
-  // Location: stored as lastSeenLatitude/Longitude/Address
   latitude: a.lastSeenLatitude ?? a.latitude ?? 0,
   longitude: a.lastSeenLongitude ?? a.longitude ?? 0,
   city: a.lastSeenAddress ?? a.city ?? '',
-  // Sighting count: _count.sightings when Prisma includes it, or flat field
   sightingCount: a._count?.sightings ?? a.sightingCount ?? 0,
   createdAt: a.createdAt,
   updatedAt: a.updatedAt,
@@ -168,15 +154,12 @@ export const useCommunityStore = create<CommunityState>((set) => ({
       const raw = unwrapApiData<ApiAlert>(response.data);
       const selectedAlert = normalizeAlert(raw);
 
-      // getAlert includes sightings[] with user relation — seed the store
-      // so AlertDetailScreen doesn't need a second round-trip
       const embeddedSightings: Sighting[] = Array.isArray(raw.sightings)
         ? raw.sightings.map((s) => normalizeSighting(s))
         : [];
 
       set((state) => ({
         selectedAlert,
-        // Only replace if we got embedded sightings; otherwise keep existing
         sightings: embeddedSightings.length > 0
           ? { ...state.sightings, [id]: embeddedSightings }
           : state.sightings,
@@ -191,36 +174,9 @@ export const useCommunityStore = create<CommunityState>((set) => ({
   createAlert: async (data: CreateAlertRequest): Promise<Alert> => {
     set({ isLoading: true, error: null });
     try {
-      let uploadedPhotoUrl: string | undefined;
-
-      // Upload photo first if one was selected (local URI)
-      if (data.photoUrl && data.photoUrl.startsWith('file')) {
-        try {
-          const formData = new FormData();
-          const filename = data.photoUrl.split('/').pop() ?? 'photo.jpg';
-          const match = /\.(\w+)$/.exec(filename);
-          const type = match ? `image/${match[1]}` : 'image/jpeg';
-          // React Native FormData accepts this shape for file blobs
-          formData.append('file', { uri: data.photoUrl, name: filename, type } as unknown as Blob);
-
-          const uploadResponse = await api.post<{ url: string }>('/uploads/image', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-          uploadedPhotoUrl = uploadResponse.data?.url;
-        } catch (uploadErr) {
-          // Non-fatal: continue creating the alert without the photo
-          console.warn('Photo upload failed, creating alert without image:', uploadErr);
-        }
-      } else if (data.photoUrl) {
-        // Already a remote URL (e.g. Cloudinary URL from a previous upload)
-        uploadedPhotoUrl = data.photoUrl;
-      }
-
-      // Body must exactly match lostFoundAlertSchema:
-      // type, title, description, lastSeenAddress, lastSeenLatitude, lastSeenLongitude,
-      // petId (optional), contactPhone (optional), photoUrl (optional)
-      // NOTE: petName/petBreed are NOT schema fields — they live on the Pet record.
-      // If the user wants to link a pet they must pass petId.
+      // P0 #3: photoUrl is already a Cloudinary URL (or undefined).
+      // The screen uses ImageUploader which uploads before calling this action,
+      // so no upload logic is needed here.
       const body: Record<string, unknown> = {
         type: data.type.toUpperCase(),
         title: data.title,
@@ -230,7 +186,7 @@ export const useCommunityStore = create<CommunityState>((set) => ({
         lastSeenLatitude: data.latitude,
         lastSeenLongitude: data.longitude,
         ...(data.petId ? { petId: data.petId } : {}),
-        ...(uploadedPhotoUrl ? { photoUrl: uploadedPhotoUrl } : {}),
+        ...(data.photoUrl ? { photoUrl: data.photoUrl } : {}),
       };
 
       const response = await api.post('/community/lost-found', body);
@@ -287,32 +243,13 @@ export const useCommunityStore = create<CommunityState>((set) => ({
   createSighting: async (alertId: string, data: CreateSightingRequest) => {
     set({ isLoading: true, error: null });
     try {
-      let uploadedPhotoUrl: string | undefined;
-
-      if (data.photoUrl && data.photoUrl.startsWith('file')) {
-        try {
-          const formData = new FormData();
-          const filename = data.photoUrl.split('/').pop() ?? 'photo.jpg';
-          const match = /\.(\w+)$/.exec(filename);
-          const type = match ? `image/${match[1]}` : 'image/jpeg';
-          formData.append('file', { uri: data.photoUrl, name: filename, type } as unknown as Blob);
-
-          const uploadResponse = await api.post<{ url: string }>('/uploads/image', formData, {
-            headers: { 'Content-Type': 'multipart/form-data' },
-          });
-          uploadedPhotoUrl = uploadResponse.data?.url;
-        } catch {
-          console.warn('Sighting photo upload failed, continuing without image');
-        }
-      } else if (data.photoUrl) {
-        uploadedPhotoUrl = data.photoUrl;
-      }
-
+      // P0 #3: photoUrl is already a Cloudinary URL (or undefined).
+      // The caller (AlertDetailScreen) uses ImageUploader or passes a pre-uploaded URL.
       const body = {
         description: data.description,
         latitude: data.latitude,
         longitude: data.longitude,
-        ...(uploadedPhotoUrl ? { photoUrl: uploadedPhotoUrl } : {}),
+        ...(data.photoUrl ? { photoUrl: data.photoUrl } : {}),
       };
 
       const response = await api.post(`/community/lost-found/${alertId}/sightings`, body);
@@ -325,7 +262,6 @@ export const useCommunityStore = create<CommunityState>((set) => ({
           ...state.sightings,
           [alertId]: [...(state.sightings[alertId] ?? []), newSighting],
         },
-        // Bump sighting count on the selected alert optimistically
         selectedAlert:
           state.selectedAlert?.id === alertId
             ? {

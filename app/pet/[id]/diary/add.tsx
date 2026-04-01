@@ -14,8 +14,7 @@ import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
-import { ImageUploader } from '../../../../components/ui/ImageUploader';
-import { ScreenHeader, useToast } from '../../../../components/ui';
+import { ImageUploader, ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
 import { DiaryMood, DiaryActivity, CreateDiaryRequest } from '../../../../types';
 
@@ -51,6 +50,7 @@ export default function AddDiaryScreen() {
   const [content, setContent] = useState('');
   const [mood, setMood] = useState<DiaryMood | undefined>(undefined);
   const [activity, setActivity] = useState<DiaryActivity | undefined>(undefined);
+  // imageUrl is set to local URI on pick, then replaced with Cloudinary URL on upload.
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
 
@@ -64,7 +64,11 @@ export default function AddDiaryScreen() {
       return;
     }
     if (isUploading) {
-      showToast({ type: 'warning', title: 'Photo still uploading', message: 'Please wait a moment.' });
+      showToast({
+        type: 'warning',
+        title: 'Photo still uploading',
+        message: 'Please wait a moment before saving.',
+      });
       return;
     }
 
@@ -78,7 +82,7 @@ export default function AddDiaryScreen() {
       };
       await createDiary(id!, diaryData);
       router.back();
-    } catch (error) {
+    } catch {
       Alert.alert('Error', 'Failed to create diary entry');
     }
   };
@@ -111,11 +115,19 @@ export default function AddDiaryScreen() {
               {moodOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
-                  style={[styles.moodOption, mood === option.value && styles.moodOptionSelected]}
+                  style={[
+                    styles.moodOption,
+                    mood === option.value && styles.moodOptionSelected,
+                  ]}
                   onPress={() => setMood(mood === option.value ? undefined : option.value)}
                 >
                   <Text style={styles.moodEmoji}>{option.emoji}</Text>
-                  <Text style={[styles.moodLabel, mood === option.value && styles.moodLabelSelected]}>
+                  <Text
+                    style={[
+                      styles.moodLabel,
+                      mood === option.value && styles.moodLabelSelected,
+                    ]}
+                  >
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -130,10 +142,20 @@ export default function AddDiaryScreen() {
               {activityOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
-                  style={[styles.activityOption, activity === option.value && styles.activityOptionSelected]}
-                  onPress={() => setActivity(activity === option.value ? undefined : option.value)}
+                  style={[
+                    styles.activityOption,
+                    activity === option.value && styles.activityOptionSelected,
+                  ]}
+                  onPress={() =>
+                    setActivity(activity === option.value ? undefined : option.value)
+                  }
                 >
-                  <Text style={[styles.activityLabel, activity === option.value && styles.activityLabelSelected]}>
+                  <Text
+                    style={[
+                      styles.activityLabel,
+                      activity === option.value && styles.activityLabelSelected,
+                    ]}
+                  >
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -156,7 +178,7 @@ export default function AddDiaryScreen() {
             />
           </View>
 
-          {/* Photo — now wired to Cloudinary via ImageUploader */}
+          {/* Photo — wired to Cloudinary via ImageUploader */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Add Photo (Optional)</Text>
             <ImageUploader
@@ -199,7 +221,12 @@ const styles = StyleSheet.create({
   keyboardView: { flex: 1 },
   scrollView: { flex: 1, padding: 20 },
   inputGroup: { marginBottom: 20 },
-  label: { fontSize: 14, fontWeight: '600', color: Colors.textPrimary, marginBottom: 8 },
+  label: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
   input: {
     backgroundColor: Colors.surface,
     borderRadius: 12,
@@ -222,7 +249,10 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     gap: 4,
   },
-  moodOptionSelected: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
+  moodOptionSelected: {
+    backgroundColor: Colors.primaryBg,
+    borderColor: Colors.primary,
+  },
   moodEmoji: { fontSize: 24 },
   moodLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
   moodLabelSelected: { color: Colors.primary },

@@ -4,13 +4,15 @@
  * Drop-in image picker + upload component.
  *
  * Props:
- *   value        — current image URI (local or remote)
- *   onChange     — called with the resolved Cloudinary URL after a successful upload
- *                  OR called with the local URI immediately so the UI feels responsive
- *   folder       — Cloudinary upload folder ('pets' | 'alerts' | 'diaries' | 'sightings')
- *   shape        — 'circle' (avatar) | 'rect' (banner/photo)
- *   placeholder  — content to render when no image is selected
- *   onUploadStart / onUploadEnd — lifecycle hooks so parent can disable Submit
+ *   value          — current image URI (local or remote Cloudinary URL)
+ *   onChange       — called with local URI immediately (for snappy UI),
+ *                    then called again with the final Cloudinary URL
+ *   folder         — Cloudinary sub-folder: 'pets' | 'alerts' | 'diaries' | 'sightings'
+ *   shape          — 'circle' (avatar, e.g. pet photo) | 'rect' (banner, e.g. alert photo)
+ *   width / height — dimensions of the tappable area
+ *   placeholder    — custom content when no image is selected
+ *   onUploadStart  — called when the upload begins (use to disable Submit)
+ *   onUploadEnd    — called when upload finishes or fails (re-enable Submit)
  */
 
 import React, { useState } from 'react';
@@ -33,7 +35,7 @@ interface ImageUploaderProps {
   onChange: (url: string) => void;
   folder?: UploadFolder;
   shape?: 'circle' | 'rect';
-  width?: number;
+  width?: number | string;
   height?: number;
   placeholder?: React.ReactNode;
   onUploadStart?: () => void;
@@ -72,7 +74,7 @@ export function ImageUploader({
 
     const localUri = result.assets[0].uri;
 
-    // Show the local image immediately for snappy UX
+    // Show the local image immediately for a snappy feel
     onChange(localUri);
     onUploadStart?.();
     setProgress(0);
@@ -84,11 +86,11 @@ export function ImageUploader({
       });
 
       if (remoteUrl) {
-        onChange(remoteUrl);
+        onChange(remoteUrl); // replace local URI with the final Cloudinary URL
       }
       onUploadEnd?.();
     } catch (err) {
-      // Keep showing local URI but notify parent
+      // Keep showing local URI so the user sees their selection, but notify parent
       const error = err instanceof Error ? err : new Error('Upload failed');
       onUploadEnd?.(error);
     } finally {
@@ -96,16 +98,23 @@ export function ImageUploader({
     }
   };
 
-  const borderRadius = shape === 'circle' ? width / 2 : 12;
+  const numericWidth = typeof width === 'number' ? width : undefined;
+  const borderRadius = shape === 'circle' && numericWidth ? numericWidth / 2 : 12;
 
   return (
     <TouchableOpacity
       onPress={handlePick}
       activeOpacity={0.8}
       disabled={disabled || isUploading}
-      style={[{ width, height }, style]}
+      style={[typeof width === 'number' ? { width, height } : { height }, style]}
     >
-      <View style={[styles.wrapper, { width, height, borderRadius }]}>
+      <View
+        style={[
+          styles.wrapper,
+          typeof width === 'number' ? { width, height } : { width: '100%', height },
+          { borderRadius },
+        ]}
+      >
         {value ? (
           <Image
             source={{ uri: value }}
@@ -120,7 +129,7 @@ export function ImageUploader({
           </View>
         )}
 
-        {/* Uploading overlay */}
+        {/* Upload overlay with live percentage */}
         {isUploading && (
           <View style={[styles.overlay, { borderRadius }]}>
             <ActivityIndicator size="small" color={Colors.textInverse} />
@@ -128,7 +137,7 @@ export function ImageUploader({
           </View>
         )}
 
-        {/* Edit badge (when image exists and not uploading) */}
+        {/* Edit badge when image is set and not currently uploading */}
         {value && !isUploading && (
           <View style={styles.editBadge}>
             <RefreshCw size={10} color={Colors.textInverse} />
