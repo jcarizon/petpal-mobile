@@ -6,6 +6,7 @@ import {
   FlatList,
   Pressable,
   RefreshControl,
+  TouchableOpacity,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
@@ -15,20 +16,24 @@ import { AlertCard } from '../../components/community/AlertCard';
 import { Tabs } from '../../components/ui/Tabs';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Loading } from '../../components/ui/Loading';
+import { PageBanner } from '../../components/ui';
 import { useCommunityStore } from '../../store/communityStore';
 import { useLocation } from '../../hooks/useLocation';
+import { useAuthStore } from '../../store/authStore';
 import { Alert as AlertType } from '../../types';
 
 const TABS = [
   { key: 'all', label: 'All' },
   { key: 'lost', label: 'Lost' },
   { key: 'found', label: 'Found' },
+  { key: 'me', label: 'Me' },
 ];
 
 export default function CommunityScreen() {
   const router = useRouter();
   const { alerts, fetchAlerts, isLoading } = useCommunityStore();
   const { coordinates } = useLocation();
+  const { user } = useAuthStore();
   const [activeTab, setActiveTab] = useState('all');
   const [refreshing, setRefreshing] = useState(false);
 
@@ -52,6 +57,7 @@ export default function CommunityScreen() {
 
   const filteredAlerts = alerts.filter((a: AlertType) => {
     if (activeTab === 'all') return true;
+    if (activeTab === 'me') return a.userId === user?.id;
     return a.type === activeTab;
   });
 
@@ -61,10 +67,20 @@ export default function CommunityScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Header */}
-      <View style={styles.header}>
-        <Text style={styles.title}>Community</Text>
-      </View>
+      <PageBanner
+        title="Community"
+        subtitle="Find and report lost or found pets in your neighborhood."
+        helper="Switch between tabs to focus on lost or found alerts."
+        iconNode={<BellOff size={18} color={Colors.textInverse} />}
+        rightNode={
+          <TouchableOpacity
+            style={styles.addButton}
+            onPress={() => router.push('/alert/create')}
+          >
+            <Plus size={20} color={Colors.primary} />
+          </TouchableOpacity>
+        }
+      />
 
       {/* Tabs */}
       <View style={styles.tabsContainer}>
@@ -80,6 +96,7 @@ export default function CommunityScreen() {
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
         }
+        contentInsetAdjustmentBehavior="never"
         ListEmptyComponent={
           <EmptyState
             iconNode={<BellOff size={54} color={Colors.textSecondary} />}
@@ -117,34 +134,34 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 12,
-  },
-  title: {
-    fontSize: 24,
-    fontWeight: '800',
-    color: Colors.textPrimary,
+  addButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.textInverse,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   tabsContainer: {
-    paddingHorizontal: 20,
-    marginBottom: 16,
+    marginTop: 10,
+    marginBottom: 12,
+    marginHorizontal: 20,
   },
   list: {
+    paddingTop: 0,
     paddingHorizontal: 20,
-    paddingBottom: 116,
+    paddingBottom: 100,
   },
   alertGap: {
     height: 12,
   },
   alertCardWrap: {
-    borderRadius: 14,
+    marginBottom: 2,
   },
   fab: {
     position: 'absolute',
-    bottom: 28,
     right: 20,
+    bottom: 20,
     width: 56,
     height: 56,
     borderRadius: 28,

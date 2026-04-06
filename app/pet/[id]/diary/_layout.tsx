@@ -6,6 +6,9 @@ export default function DiaryLayout() {
       screenOptions={{
         headerShown: false,
       }}
-    />
+    >
+      <Stack.Screen name="add" />
+      <Stack.Screen name="[diaryId]" />
+    </Stack>
   );
 }

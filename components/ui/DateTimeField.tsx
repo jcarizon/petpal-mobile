@@ -12,6 +12,7 @@ interface DateTimeFieldProps {
   error?: string;
   minimumDate?: Date;
   maximumDate?: Date;
+  disabled?: boolean;
 }
 
 const formatDisplayValue = (value: Date | null, mode: 'date' | 'datetime') => {
@@ -42,6 +43,7 @@ export function DateTimeField({
   error,
   minimumDate,
   maximumDate,
+  disabled,
 }: DateTimeFieldProps) {
   const [showPicker, setShowPicker] = useState(false);
   const [isSelectingTime, setIsSelectingTime] = useState(false);
@@ -91,14 +93,23 @@ export function DateTimeField({
       <Text style={styles.label}>{label}</Text>
 
       <Pressable
-        style={[styles.field, !!error && styles.fieldError]}
+        style={[
+          styles.field, 
+          !!error && styles.fieldError,
+          disabled && styles.fieldDisabled,
+        ]}
         onPress={() => {
-          setIsSelectingTime(false);
-          setShowPicker(true);
+          if (!disabled) {
+            setIsSelectingTime(false);
+            setShowPicker(true);
+          }
         }}
+        disabled={disabled}
       >
-        <Text style={[styles.valueText, !value && styles.placeholder]}>{displayValue}</Text>
-        <CalendarClock size={18} color={Colors.textSecondary} />
+        <Text style={[styles.valueText, !value && styles.placeholder, disabled && styles.valueTextDisabled]}>
+          {displayValue}
+        </Text>
+        <CalendarClock size={18} color={disabled ? Colors.textDisabled : Colors.textSecondary} />
       </Pressable>
 
       {!!error && <Text style={styles.errorText}>{error}</Text>}
@@ -139,8 +150,8 @@ const styles = StyleSheet.create({
     gap: 6,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.textPrimary,
   },
   field: {
@@ -157,6 +168,10 @@ const styles = StyleSheet.create({
   fieldError: {
     borderColor: Colors.error,
   },
+  fieldDisabled: {
+    backgroundColor: Colors.neutral100,
+    borderColor: Colors.neutral300,
+  },
   valueText: {
     fontSize: 15,
     color: Colors.textPrimary,
@@ -165,6 +180,9 @@ const styles = StyleSheet.create({
   placeholder: {
     color: Colors.textDisabled,
     fontWeight: '400',
+  },
+  valueTextDisabled: {
+    color: Colors.textDisabled,
   },
   errorText: {
     fontSize: 12,

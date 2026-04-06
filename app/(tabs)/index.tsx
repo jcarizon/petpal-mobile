@@ -7,16 +7,15 @@ import {
   TouchableOpacity,
   RefreshControl,
   Pressable,
-  Animated,
+  Image,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, Syringe, Search, Megaphone, PawPrint, BellRing, ChevronRight } from 'lucide-react-native';
+import { Plus, Syringe, Search, Megaphone, Sparkles, CircleDashed, Star, Fish, Bird, Rabbit } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { PetCard } from '../../components/pet/PetCard';
 import { AlertCard } from '../../components/community/AlertCard';
-import { Card } from '../../components/ui/Card';
+import { Card, PageBanner } from '../../components/ui';
 import { Loading } from '../../components/ui/Loading';
 import { useAuthStore } from '../../store/authStore';
 import { usePetStore } from '../../store/petStore';
@@ -27,11 +26,16 @@ import { useLocation } from '../../hooks/useLocation';
 export default function HomeScreen() {
   const router = useRouter();
   const { user } = useAuthStore();
-  const { pets, fetchPets, isLoading: petsLoading } = usePetStore();
+  const {
+    pets,
+    fetchPets,
+    healthScores,
+    fetchHealthRecords,
+    isLoading: petsLoading,
+  } = usePetStore();
   const { alerts, fetchAlerts, isLoading: alertsLoading } = useCommunityStore();
   const { coordinates } = useLocation();
   const [refreshing, setRefreshing] = React.useState(false);
-  const entryAnim = React.useRef(new Animated.Value(0)).current;
 
   useEffect(() => {
     fetchPets();
@@ -39,12 +43,13 @@ export default function HomeScreen() {
   }, [fetchPets, fetchAlerts]);
 
   useEffect(() => {
-    Animated.timing(entryAnim, {
-      toValue: 1,
-      duration: 420,
-      useNativeDriver: true,
-    }).start();
-  }, [entryAnim]);
+    pets.forEach((pet) => {
+      const existingScore = healthScores[pet.id];
+      if (!existingScore || existingScore.score == null) {
+        fetchHealthRecords(pet.id);
+      }
+    });
+  }, [pets, healthScores, fetchHealthRecords]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
@@ -55,76 +60,46 @@ export default function HomeScreen() {
   const recentAlerts = alerts.slice(0, 3);
   const greeting = getGreeting();
   const userName = user?.name?.split(' ')[0] ?? 'Friend';
+  const petLabel = `${pets.length} pet${pets.length === 1 ? '' : 's'}`;
+  const alertLabel = `${recentAlerts.length} alert${recentAlerts.length === 1 ? '' : 's'}`;
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <ScrollView
-        contentContainerStyle={styles.contentContainer}
-        showsVerticalScrollIndicator={false}
+        <ScrollView
+          contentContainerStyle={styles.contentContainer}
+          showsVerticalScrollIndicator={false}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
         }
+        contentInsetAdjustmentBehavior="never"
       >
-        {/* Header */}
-        <View style={styles.header}>
-          <View>
-            <Text style={styles.greeting}>{greeting},</Text>
-            <Text style={styles.name}>{userName} 👋</Text>
-            <Text style={styles.subtitle}>Everything your pet needs, in one place.</Text>
-          </View>
-          <View style={styles.avatar}>
-            <Text style={styles.avatarText}>
-              {user?.name?.charAt(0).toUpperCase() ?? 'U'}
-            </Text>
-          </View>
-        </View>
-
-        <Animated.View
-          style={{
-            opacity: entryAnim,
-            marginBottom: 18,
-            transform: [
-              {
-                translateY: entryAnim.interpolate({
-                  inputRange: [0, 1],
-                  outputRange: [8, 0],
-                }),
-              },
-            ],
-          }}
-        >
-          <LinearGradient
-            colors={[Colors.primaryDark, Colors.primary, Colors.primaryLight]}
-            start={{ x: 0, y: 0 }}
-            end={{ x: 1, y: 1 }}
-            style={styles.heroCard}
-          >
-            <View style={styles.heroTopRow}>
-              <View style={styles.heroChip}>
-                <PawPrint size={14} color={Colors.textInverse} />
-                <Text style={styles.heroChipText}>{pets.length} pets</Text>
-              </View>
-              <View style={styles.heroChip}>
-                <BellRing size={14} color={Colors.textInverse} />
-                <Text style={styles.heroChipText}>{recentAlerts.length} alerts</Text>
+        <PageBanner
+          title={`${greeting}, ${userName}`}
+          subtitle="Everything your pet needs, in one place."
+          helper={`${petLabel} · ${alertLabel} nearby`}
+          iconNode={
+            <View style={styles.bannerIconRow}>
+              <Sparkles size={14} color={Colors.textInverse} />
+              <Star size={12} color={Colors.textInverse} />
+            </View>
+          }
+          rightNode={
+            <View style={styles.bannerAvatar}>
+              <Text style={styles.bannerAvatarText}>{user?.name?.charAt(0).toUpperCase() ?? 'U'}</Text>
+              <View style={styles.bannerAvatarBadge}>
+                <Star size={10} color={Colors.textInverse} fill={Colors.textInverse} />
               </View>
             </View>
-            <Text style={styles.heroTitle}>Stay on top of your pet care</Text>
-            <Text style={styles.heroDescription}>Track records, explore nearby services, and act fast on community alerts.</Text>
-            <Pressable
-              style={({ pressed }) => [styles.heroButton, pressed && styles.pressedScale]}
-              onPress={() => router.push('/pet/add')}
-            >
-              <Text style={styles.heroButtonText}>Add New Pet</Text>
-              <ChevronRight size={16} color={Colors.primaryDark} />
-            </Pressable>
-          </LinearGradient>
-        </Animated.View>
+          }
+        />
 
         {/* Pet Carousel */}
         <View style={[styles.section, styles.sectionCard]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>My Pets</Text>
+            <View style={styles.sectionTitleRow}>
+              <CircleDashed size={18} color={Colors.primary} />
+              <Text style={styles.sectionTitle}>My Pets</Text>
+            </View>
             <TouchableOpacity onPress={() => router.push('/(tabs)/pets')}>
               <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
@@ -134,7 +109,10 @@ export default function HomeScreen() {
             <Loading size="small" />
           ) : pets.length === 0 ? (
             <Card style={styles.emptyPets}>
-              <Text style={styles.emptyPetsText}>🐾 Add your first pet</Text>
+              <View style={styles.emptyPetsDecor}>
+                <CircleDashed size={32} color={Colors.primaryLight} />
+              </View>
+              <Text style={styles.emptyPetsText}>Add your first furry friend</Text>
               <TouchableOpacity
                 style={styles.addPetButton}
                 onPress={() => router.push('/pet/add')}
@@ -149,6 +127,7 @@ export default function HomeScreen() {
                   key={pet.id}
                   pet={pet}
                   onPress={() => router.push(`/pet/${pet.id}`)}
+                  healthScore={healthScores[pet.id]?.score ?? null}
                 />
               ))}
               <TouchableOpacity
@@ -156,7 +135,9 @@ export default function HomeScreen() {
                 activeOpacity={0.82}
                 onPress={() => router.push('/pet/add')}
               >
-                <Plus size={28} color={Colors.textSecondary} />
+                <View style={styles.addPetIcon}>
+                  <Plus size={28} color={Colors.primary} />
+                </View>
                 <Text style={styles.addPetCardText}>Add Pet</Text>
               </TouchableOpacity>
             </ScrollView>
@@ -165,7 +146,10 @@ export default function HomeScreen() {
 
         {/* Quick Actions */}
         <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Quick Actions</Text>
+          <View style={styles.sectionTitleRow}>
+            <Star size={18} color={Colors.secondary} />
+            <Text style={styles.sectionTitle}>Quick Actions</Text>
+          </View>
           <View style={styles.quickActions}>
             <Pressable
               style={({ pressed }) => [
@@ -183,7 +167,7 @@ export default function HomeScreen() {
             <Pressable
               style={({ pressed }) => [
                 styles.quickAction,
-                { backgroundColor: Colors.neutral50, borderColor: Colors.error },
+                { backgroundColor: '#FEF2F2', borderColor: Colors.error },
                 pressed && styles.pressedScale,
               ]}
               onPress={() => router.push('/alert/create')}
@@ -212,7 +196,10 @@ export default function HomeScreen() {
         {/* Community Alerts Snippet */}
         <View style={[styles.section, styles.sectionCard]}>
           <View style={styles.sectionHeader}>
-            <Text style={styles.sectionTitle}>Community Alerts</Text>
+            <View style={styles.sectionTitleRow}>
+              <Megaphone size={18} color={Colors.error} />
+              <Text style={styles.sectionTitle}>Community Alerts</Text>
+            </View>
             <TouchableOpacity onPress={() => router.push('/(tabs)/community')}>
               <Text style={styles.seeAll}>See all</Text>
             </TouchableOpacity>
@@ -221,10 +208,14 @@ export default function HomeScreen() {
           {alertsLoading ? (
             <Loading size="small" />
           ) : recentAlerts.length === 0 ? (
-            <Text style={styles.noAlertsText}>No alerts nearby</Text>
+            <View style={styles.noAlertsContainer}>
+              <CircleDashed size={24} color={Colors.neutral300} />
+              <Text style={styles.noAlertsText}>No alerts nearby</Text>
+              <Text style={styles.noAlertsSubtext}>Your neighborhood is safe!</Text>
+            </View>
           ) : (
             <View style={styles.alertsList}>
-              {recentAlerts.map((alert) => (
+              {recentAlerts.map((alert, index) => (
                 <View key={alert.id} style={styles.alertItem}>
                   <AlertCard
                     alert={alert}
@@ -248,96 +239,42 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.background,
   },
   contentContainer: {
+    paddingTop: 0,
     paddingBottom: 132,
   },
-  header: {
+  bannerIconRow: {
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    gap: 4,
     alignItems: 'center',
-    paddingHorizontal: 20,
-    paddingTop: 4,
-    paddingBottom: 8,
   },
-  greeting: {
-    fontSize: 14,
-    color: Colors.textSecondary,
-  },
-  name: {
-    fontSize: 26,
-    fontWeight: '800',
-    color: Colors.textPrimary,
-  },
-  subtitle: {
-    marginTop: 2,
-    fontSize: 13,
-    color: Colors.textSecondary,
-  },
-  avatar: {
-    width: 48,
-    height: 48,
-    borderRadius: 24,
-    backgroundColor: Colors.primary,
+  bannerAvatar: {
+    width: 56,
+    height: 56,
+    borderRadius: 18,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    borderWidth: 2,
+    borderColor: 'rgba(255,255,255,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    borderWidth: 3,
-    borderColor: Colors.primaryBg,
+    position: 'relative',
   },
-  avatarText: {
-    color: Colors.textInverse,
-    fontWeight: '700',
-    fontSize: 18,
-  },
-  heroCard: {
-    marginHorizontal: 20,
-    marginTop: 0,
-    borderRadius: 20,
-    padding: 18,
-    gap: 10,
-  },
-  heroTopRow: {
-    flexDirection: 'row',
-    gap: 8,
-  },
-  heroChip: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 6,
-    paddingHorizontal: 10,
-    paddingVertical: 6,
-    borderRadius: 999,
-    backgroundColor: 'rgba(255, 255, 255, 0.16)',
-  },
-  heroChipText: {
-    color: Colors.textInverse,
-    fontSize: 12,
-    fontWeight: '700',
-  },
-  heroTitle: {
-    color: Colors.textInverse,
-    fontSize: 21,
+  bannerAvatarText: {
+    fontSize: 20,
     fontWeight: '800',
-  },
-  heroDescription: {
     color: Colors.textInverse,
-    opacity: 0.95,
-    fontSize: 13,
-    lineHeight: 18,
   },
-  heroButton: {
-    marginTop: 4,
-    alignSelf: 'flex-start',
-    flexDirection: 'row',
+  bannerAvatarBadge: {
+    position: 'absolute',
+    right: -4,
+    bottom: -4,
+    width: 22,
+    height: 22,
+    borderRadius: 12,
+    backgroundColor: Colors.secondary,
+    borderWidth: 2,
+    borderColor: Colors.surface,
     alignItems: 'center',
-    gap: 6,
-    backgroundColor: Colors.surface,
-    borderRadius: 999,
-    paddingHorizontal: 12,
-    paddingVertical: 8,
-  },
-  heroButtonText: {
-    color: Colors.primaryDark,
-    fontSize: 13,
-    fontWeight: '800',
+    justifyContent: 'center',
   },
   section: {
     paddingHorizontal: 20,
@@ -356,11 +293,22 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderWidth: 1,
     borderColor: Colors.border,
+    shadowColor: Colors.neutral900,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 5,
   },
   sectionHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'center',
+    marginBottom: 4,
+  },
+  sectionTitleRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
   },
   sectionTitle: {
     fontSize: 18,
@@ -377,15 +325,25 @@ const styles = StyleSheet.create({
     paddingVertical: 24,
     gap: 12,
   },
+  emptyPetsDecor: {
+    backgroundColor: Colors.primaryBg,
+    padding: 16,
+    borderRadius: 50,
+    marginBottom: 4,
+  },
   emptyPetsText: {
     fontSize: 16,
     color: Colors.textSecondary,
+    fontWeight: '500',
   },
   addPetButton: {
     backgroundColor: Colors.primary,
-    paddingHorizontal: 20,
-    paddingVertical: 10,
-    borderRadius: 20,
+    paddingHorizontal: 24,
+    paddingVertical: 12,
+    borderRadius: 24,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 6,
   },
   addPetButtonText: {
     color: Colors.textInverse,
@@ -397,22 +355,24 @@ const styles = StyleSheet.create({
     minHeight: 148,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.neutral100,
+    backgroundColor: Colors.primaryBg,
     borderRadius: 16,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
+    borderWidth: 2,
+    borderColor: Colors.primary,
     borderStyle: 'dashed',
     gap: 8,
-    shadowColor: Colors.neutral900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.08,
-    shadowRadius: 6,
-    elevation: 2,
+  },
+  addPetIcon: {
+    backgroundColor: Colors.surface,
+    padding: 12,
+    borderRadius: 50,
+    borderWidth: 2,
+    borderColor: Colors.primary,
   },
   addPetCardText: {
     fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '600',
+    color: Colors.primary,
+    fontWeight: '700',
   },
   petRow: {
     gap: 16,
@@ -429,14 +389,16 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     minHeight: 110,
     padding: 12,
-    borderRadius: 14,
-    borderWidth: 1,
+    borderRadius: 16,
+    borderWidth: 1.5,
     gap: 10,
+    position: 'relative',
+    overflow: 'hidden',
   },
   quickActionIconWrap: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
+    width: 36,
+    height: 36,
+    borderRadius: 18,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -454,10 +416,21 @@ const styles = StyleSheet.create({
   alertItem: {
     marginBottom: 2,
   },
+  noAlertsContainer: {
+    alignItems: 'center',
+    padding: 24,
+    backgroundColor: Colors.neutral50,
+    borderRadius: 12,
+  },
   noAlertsText: {
-    fontSize: 14,
+    fontSize: 16,
     color: Colors.textSecondary,
-    textAlign: 'center',
-    padding: 20,
+    fontWeight: '500',
+    marginTop: 8,
+  },
+  noAlertsSubtext: {
+    fontSize: 13,
+    color: Colors.textDisabled,
+    marginTop: 4,
   },
 });

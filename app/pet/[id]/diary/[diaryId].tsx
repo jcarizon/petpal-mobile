@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -12,12 +12,12 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { ChevronLeft, Camera, Trash2 } from 'lucide-react-native';
+import { Camera, Edit3, ArrowLeft } from 'lucide-react-native';
 import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
 import { ScreenHeader } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
-import { DiaryMood, DiaryActivity, CreateDiaryRequest, PetDiary } from '../../../../types';
+import { DiaryMood, DiaryActivity, CreateDiaryRequest } from '../../../../types';
 
 const moodOptions: { value: DiaryMood; label: string; emoji: string }[] = [
   { value: 'happy', label: 'Happy', emoji: '😊' },
@@ -47,6 +47,7 @@ export default function EditDiaryScreen() {
   const { diaries, updateDiary, deleteDiary, isLoading } = usePetStore();
 
   const diary = diaries[id ?? '']?.find((d) => d.id === diaryId);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
@@ -64,11 +65,8 @@ export default function EditDiaryScreen() {
 
   if (!diary) {
     return (
-      <SafeAreaView style={styles.container}>
-        <ScreenHeader
-          title="Edit Diary"
-          subtitle="Diary entry not found"
-        />
+      <SafeAreaView style={styles.viewContainer}>
+        <ScreenHeader title="Edit Diary" subtitle="Diary entry not found" />
       </SafeAreaView>
     );
   }
@@ -117,130 +115,163 @@ export default function EditDiaryScreen() {
         },
       ]
     );
-  };
+};
 
-  return (
-    <SafeAreaView style={styles.container} edges={['bottom']}>
-      <ScreenHeader
-        title="Edit Diary"
-        subtitle="Update your diary entry"
-      />
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-        style={styles.keyboardView}
-      >
-        <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
-          {/* Title Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Title *</Text>
-            <TextInput
-              style={styles.input}
-              placeholder="e.g., A great day at the park!"
-              placeholderTextColor={Colors.textSecondary}
-              value={title}
-              onChangeText={setTitle}
-              maxLength={100}
-            />
-          </View>
+  const moodInfo = useMemo(() => moodOptions.find((m) => m.value === diary?.mood), [diary?.mood]);
+  const activityInfo = useMemo(() => activityOptions.find((a) => a.value === diary?.activity), [diary?.activity]);
 
-          {/* Mood Selection */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>How is your pet feeling?</Text>
-            <View style={styles.optionsGrid}>
-              {moodOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.moodOption,
-                    mood === option.value && styles.moodOptionSelected,
-                  ]}
-                  onPress={() => setMood(mood === option.value ? undefined : option.value)}
-                >
-                  <Text style={styles.moodEmoji}>{option.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.moodLabel,
-                      mood === option.value && styles.moodLabelSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Activity Selection */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>What did you do today?</Text>
-            <View style={styles.activityGrid}>
-              {activityOptions.map((option) => (
-                <TouchableOpacity
-                  key={option.value}
-                  style={[
-                    styles.activityOption,
-                    activity === option.value && styles.activityOptionSelected,
-                  ]}
-                  onPress={() => setActivity(activity === option.value ? undefined : option.value)}
-                >
-                  <Text
-                    style={[
-                      styles.activityLabel,
-                      activity === option.value && styles.activityLabelSelected,
-                    ]}
-                  >
-                    {option.label}
-                  </Text>
-                </TouchableOpacity>
-              ))}
-            </View>
-          </View>
-
-          {/* Content Input */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Tell us more *</Text>
-            <TextInput
-              style={[styles.input, styles.textArea]}
-              placeholder="Write about your pet's day, special moments, behaviors, or anything you'd like to remember..."
-              placeholderTextColor={Colors.textSecondary}
-              value={content}
-              onChangeText={setContent}
-              multiline
-              numberOfLines={6}
-              textAlignVertical="top"
-            />
-          </View>
-
-          {/* Photo Placeholder */}
-          <View style={styles.inputGroup}>
-            <Text style={styles.label}>Add Photo (Optional)</Text>
-            <TouchableOpacity style={styles.photoButton}>
-              <Camera size={24} color={Colors.primary} />
-              <Text style={styles.photoButtonText}>Change Photo</Text>
+return (
+    <>
+      {!isEditing ? (
+        <SafeAreaView style={styles.viewContainer}>
+          <View style={styles.viewHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <ArrowLeft size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <Text style={styles.viewTitle}>Diary Entry</Text>
+            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
+              <Edit3 size={20} color={Colors.primary} />
             </TouchableOpacity>
           </View>
+          <ScrollView contentContainerStyle={styles.viewContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.viewCard}>
+              <View style={styles.viewTypeRow}>
+                <Text style={styles.viewTypeEmoji}>{moodInfo?.emoji}</Text>
+                <View style={styles.viewTypeInfo}>
+                  <Text style={styles.viewTypeLabel}>{moodInfo?.label}</Text>
+                  <Text style={styles.viewDate}>{diary ? new Date(diary.createdAt).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : ''}</Text>
+                </View>
+              </View>
+              <Text style={styles.viewTitleText}>{diary?.title}</Text>
+              <Text style={styles.viewContentText}>{diary?.content}</Text>
+              {diary?.activity && (
+                <View style={styles.viewField}>
+                  <Text style={styles.viewFieldLabel}>Activity</Text>
+                  <Text style={styles.viewFieldText}>{activityInfo?.label}</Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+      ) : (
+        <KeyboardAvoidingView
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+          style={styles.keyboardView}
+        >
+          <ScreenHeader title="Edit Diary" subtitle="Update your diary entry" />
+          <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
+            {/* Title Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Title *</Text>
+              <TextInput
+                style={styles.input}
+                placeholder="e.g., A great day at the park!"
+                placeholderTextColor={Colors.textSecondary}
+                value={title}
+                onChangeText={setTitle}
+                maxLength={100}
+              />
+            </View>
 
-          {/* Save Button */}
-          <View style={styles.buttonContainer}>
-            <Button
-              title="Save Changes"
-              onPress={handleSave}
-              isLoading={isLoading}
-              disabled={!title.trim() || !content.trim()}
-            />
-          </View>
+            {/* Mood Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>How is your pet feeling?</Text>
+              <View style={styles.optionsGrid}>
+                {moodOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.moodOption,
+                      mood === option.value && styles.moodOptionSelected,
+                    ]}
+                    onPress={() => setMood(mood === option.value ? undefined : option.value)}
+                  >
+                    <Text style={styles.moodEmoji}>{option.emoji}</Text>
+                    <Text
+                      style={[
+                        styles.moodLabel,
+                        mood === option.value && styles.moodLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
 
-          {/* Delete Button */}
-          <View style={styles.deleteButtonContainer}>
-            <Button
-              title="Delete Entry"
-              variant="ghost"
-              onPress={handleDelete}
-            />
-          </View>
-        </ScrollView>
-      </KeyboardAvoidingView>
-    </SafeAreaView>
+            {/* Activity Selection */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>What did you do today?</Text>
+              <View style={styles.activityGrid}>
+                {activityOptions.map((option) => (
+                  <TouchableOpacity
+                    key={option.value}
+                    style={[
+                      styles.activityOption,
+                      activity === option.value && styles.activityOptionSelected,
+                    ]}
+                    onPress={() => setActivity(activity === option.value ? undefined : option.value)}
+                  >
+                    <Text
+                      style={[
+                        styles.activityLabel,
+                        activity === option.value && styles.activityLabelSelected,
+                      ]}
+                    >
+                      {option.label}
+                    </Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            {/* Content Input */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Tell us more *</Text>
+              <TextInput
+                style={[styles.input, styles.textArea]}
+                placeholder="Write about your pet's day, special moments, behaviors, or anything you'd like to remember..."
+                placeholderTextColor={Colors.textSecondary}
+                value={content}
+                onChangeText={setContent}
+                multiline
+                numberOfLines={6}
+                textAlignVertical="top"
+              />
+            </View>
+
+            {/* Photo Placeholder */}
+            <View style={styles.inputGroup}>
+              <Text style={styles.label}>Add Photo (Optional)</Text>
+              <TouchableOpacity style={styles.photoButton}>
+                <Camera size={24} color={Colors.primary} />
+                <Text style={styles.photoButtonText}>Change Photo</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Save Button */}
+            <View style={styles.buttonContainer}>
+              <Button
+                title="Save Changes"
+                onPress={handleSave}
+                isLoading={isLoading}
+                disabled={!title.trim() || !content.trim()}
+              />
+            </View>
+
+            {/* Delete Button */}
+            <View style={styles.deleteButtonContainer}>
+              <Button
+                title="Delete Entry"
+                variant="ghost"
+                onPress={handleDelete}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      )}
+    </>
   );
 }
 
@@ -248,6 +279,87 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  viewContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  viewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.neutral100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  editButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewContent: {
+    padding: 20,
+  },
+  viewCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  viewTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  viewTypeEmoji: {
+    fontSize: 32,
+  },
+  viewTypeInfo: {
+    flex: 1,
+  },
+  viewTypeLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  viewDate: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  viewTitleText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  viewContentText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+    marginTop: 8,
+  },
+  viewField: {
+    marginTop: 8,
+  },
+  viewFieldLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  viewFieldText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
   },
   keyboardView: {
     flex: 1,

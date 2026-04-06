@@ -9,10 +9,9 @@ export interface User {
   phone?: string;
   city: string;
   avatarUrl?: string;
-  xp: number;
-  level: number;
+  totalXP: number;
   createdAt: string;
-  updatedAt: string;
+  role: string;
 }
 
 export interface AuthTokens {
@@ -53,6 +52,8 @@ export interface Pet {
   name: string;
   type: PetType;
   breed?: string;
+  description?: string;
+  behaviour?: string;
   birthDate?: string;
   weight?: number;
   photoUrl?: string;
@@ -60,12 +61,19 @@ export interface Pet {
   createdAt: string;
   updatedAt: string;
   species?: string;
+  activeLostFoundAlert?: {
+    id: string;
+    type: 'lost' | 'found';
+    status: 'active';
+  } | null;
 }
 
 export interface CreatePetRequest {
   name: string;
   type: PetType;
   breed?: string;
+  description?: string;
+  behaviour?: string;
   birthDate?: string;
   weight?: number;
   photoUrl?: string;
@@ -278,12 +286,12 @@ export interface Badge {
 
 export interface LeaderboardEntry {
   rank: number;
-  userId: string;
+  id: string;
   name: string;
   avatarUrl?: string;
   city: string;
-  xp: number;
-  level: number;
+  totalXP: number;
+  userId?: string;
   badgeCount: number;
 }
 

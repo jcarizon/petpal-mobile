@@ -286,8 +286,38 @@ export const useCommunityStore = create<CommunityState>((set) => ({
   fetchBadges: async () => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.get<Badge[]>('/users/me/badges');
-      set({ badges: response.data, isLoading: false });
+      const user = useAuthStore.getState().user;
+      if (!user) {
+        set({ isLoading: false });
+        return;
+      }
+      const response = await api.get(`/gamification/badges/${user.id}`);
+      const payload = unwrapApiData<unknown>(response.data);
+      
+      let badgeList: Badge[] = [];
+      
+      if (Array.isArray(payload)) {
+        badgeList = (payload as Array<{ badge?: Badge; id?: string; earnedAt?: string }>).map((item) => ({
+          id: item.badge?.id ?? item.id ?? '',
+          type: item.badge?.type ?? 'vax_hero',
+          name: item.badge?.name ?? 'Badge',
+          description: item.badge?.description ?? '',
+          iconUrl: item.badge?.iconUrl,
+          earnedAt: item.earnedAt ?? item.badge?.earnedAt ?? new Date().toISOString(),
+        }));
+      } else if (Array.isArray((payload as { data?: unknown[] }).data)) {
+        const data = (payload as { data: Array<{ badge?: Badge; id?: string; earnedAt?: string }> }).data;
+        badgeList = data.map((item) => ({
+          id: item.badge?.id ?? item.id ?? '',
+          type: item.badge?.type ?? 'vax_hero',
+          name: item.badge?.name ?? 'Badge',
+          description: item.badge?.description ?? '',
+          iconUrl: item.badge?.iconUrl,
+          earnedAt: item.earnedAt ?? item.badge?.earnedAt ?? new Date().toISOString(),
+        }));
+      }
+
+      set({ badges: badgeList, isLoading: false });
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to fetch badges';
       set({ error: message, isLoading: false });
@@ -298,7 +328,7 @@ export const useCommunityStore = create<CommunityState>((set) => ({
     set({ isLoading: true, error: null });
     try {
       const query = city ? `?city=${encodeURIComponent(city)}` : '';
-      const response = await api.get<LeaderboardEntry[]>(`/users/leaderboard${query}`);
+      const response = await api.get<LeaderboardEntry[]>(`/gamification/leaderboard${query}`);
       set({ leaderboard: response.data, isLoading: false });
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to fetch leaderboard';

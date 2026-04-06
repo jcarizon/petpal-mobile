@@ -1,4 +1,4 @@
-import React, { useEffect, useState } from 'react';
+import React, { useEffect, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -8,9 +8,11 @@ import {
   Platform,
   TouchableOpacity,
   Dimensions,
+  Alert,
 } from 'react-native';
 import { useRouter } from 'expo-router';
-import { ChevronDown, LocateFixed, Megaphone, PawPrint, Search } from 'lucide-react-native';
+import MapView, { Marker, PROVIDER_GOOGLE } from 'react-native-maps';
+import { ChevronDown, LocateFixed, Megaphone, PawPrint, Search, X, Check } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { Input } from '../../components/ui/Input';
 import { Button } from '../../components/ui/Button';
@@ -18,7 +20,7 @@ import { ImageUploader, ScreenHeader, useToast } from '../../components/ui';
 import { useCommunityStore } from '../../store/communityStore';
 import { usePetStore } from '../../store/petStore';
 import { useLocation } from '../../hooks/useLocation';
-import { AlertType, CreateAlertRequest } from '../../types';
+import { AlertType, CreateAlertRequest, Coordinates } from '../../types';
 
 export default function CreateAlertScreen() {
   const router = useRouter();
@@ -38,12 +40,44 @@ export default function CreateAlertScreen() {
   const [photoUrl, setPhotoUrl] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; location?: string }>({});
+  const [showLocationModal, setShowLocationModal] = useState(false);
+  const [tempCoordinates, setTempCoordinates] = useState<Coordinates | null>(coordinates);
+  const mapRef = useRef<MapView>(null);
 
   useEffect(() => {
     fetchPets();
   }, [fetchPets]);
 
+  useEffect(() => {
+    if (coordinates) {
+      setTempCoordinates(coordinates);
+    }
+  }, [coordinates]);
+
   const selectedPet = pets.find((p) => p.id === selectedPetId);
+
+  const handlePetSelect = (petId: string | undefined) => {
+    setSelectedPetId(petId);
+    setShowPetPicker(false);
+    
+    if (petId && type === 'lost') {
+      const pet = pets.find((p) => p.id === petId);
+      if (pet) {
+        if (!title.trim()) {
+          setTitle(`Lost ${pet.name}${pet.breed ? ` - ${pet.breed}` : ''}`);
+        }
+        if (pet.description) {
+          setDescription(pet.description);
+        }
+        if (pet.photoUrl) {
+          setPhotoUrl(pet.photoUrl);
+        }
+      }
+    } else if (!petId) {
+      setDescription('');
+      setPhotoUrl(undefined);
+    }
+  };
 
   const validate = (): boolean => {
     const newErrors: typeof errors = {};
@@ -68,6 +102,34 @@ export default function CreateAlertScreen() {
         message: 'Enable location permission and try again.',
       });
     }
+  };
+
+  const handleOpenLocationModal = async () => {
+    if (!tempCoordinates && coordinates) {
+      setTempCoordinates(coordinates);
+    } else if (!tempCoordinates) {
+      const coords = await getCurrentLocation();
+      if (coords) {
+        setTempCoordinates(coords);
+      }
+    }
+    setShowLocationModal(true);
+  };
+
+  const handleConfirmLocation = () => {
+    if (tempCoordinates) {
+      setShowLocationModal(false);
+    } else {
+      Alert.alert('Select Location', 'Please tap on the map to select a location.');
+    }
+  };
+
+  const handleMapPress = (event: any) => {
+    const { coordinate } = event.nativeEvent;
+    setTempCoordinates({
+      latitude: coordinate.latitude,
+      longitude: coordinate.longitude,
+    });
   };
 
   const handleSubmit = async () => {
@@ -210,7 +272,7 @@ export default function CreateAlertScreen() {
               <View style={styles.petDropdown}>
                 <TouchableOpacity
                   style={styles.petOption}
-                  onPress={() => { setSelectedPetId(undefined); setShowPetPicker(false); }}
+                  onPress={() => handlePetSelect(undefined)}
                 >
                   <Text style={styles.petOptionText}>None</Text>
                 </TouchableOpacity>
@@ -218,7 +280,7 @@ export default function CreateAlertScreen() {
                   <TouchableOpacity
                     key={pet.id}
                     style={[styles.petOption, selectedPetId === pet.id && styles.petOptionSelected]}
-                    onPress={() => { setSelectedPetId(pet.id); setShowPetPicker(false); }}
+                    onPress={() => handlePetSelect(pet.id)}
                   >
                     <Text
                       style={[
@@ -258,25 +320,17 @@ export default function CreateAlertScreen() {
         {/* Location */}
         <View style={styles.locationSection}>
           <Text style={styles.label}>Location *</Text>
-          {coordinates ? (
-            <View style={styles.locationSet}>
-              <Text style={styles.locationText} numberOfLines={1}>
-                📍 {coordinates.latitude.toFixed(4)}, {coordinates.longitude.toFixed(4)}
-                {city ? ` · ${city}` : ''}
-              </Text>
-              <TouchableOpacity onPress={handleGetLocation}>
-                <Text style={styles.updateLocation}>Update</Text>
-              </TouchableOpacity>
-            </View>
-          ) : (
-            <Button
-              title="Use My Location"
-              variant="outline"
-              onPress={handleGetLocation}
-              fullWidth
-              leftIcon={<LocateFixed size={16} color={Colors.primary} />}
-            />
-          )}
+          <TouchableOpacity
+            style={styles.locationButton}
+            onPress={handleOpenLocationModal}
+          >
+            <LocateFixed size={16} color={Colors.primary} />
+            <Text style={styles.locationButtonText}>
+              {tempCoordinates
+                ? `${tempCoordinates.latitude.toFixed(4)}, ${tempCoordinates.longitude.toFixed(4)}`
+                : 'Select location on map'}
+            </Text>
+          </TouchableOpacity>
           {errors.location && <Text style={styles.fieldError}>{errors.location}</Text>}
         </View>
 
@@ -290,6 +344,57 @@ export default function CreateAlertScreen() {
           style={styles.submitButton}
         />
       </ScrollView>
+
+      {/* Location Modal */}
+      {showLocationModal && (
+        <View style={styles.modalOverlay}>
+          <TouchableOpacity 
+            style={styles.modalBackdrop} 
+            activeOpacity={1}
+            onPress={() => setShowLocationModal(false)} 
+          />
+          <View style={styles.modalContent}>
+            <View style={styles.modalHeader}>
+              <Text style={styles.modalTitle}>Select Location</Text>
+              <TouchableOpacity onPress={() => setShowLocationModal(false)}>
+                <X size={20} color={Colors.textSecondary} />
+              </TouchableOpacity>
+            </View>
+            <View style={styles.mapContainer}>
+              <MapView
+                ref={mapRef}
+                style={styles.map}
+                provider={PROVIDER_GOOGLE}
+                region={{
+                  latitude: tempCoordinates?.latitude ?? 10.3157,
+                  longitude: tempCoordinates?.longitude ?? 123.9214,
+                  latitudeDelta: 0.01,
+                  longitudeDelta: 0.01,
+                }}
+                onPress={handleMapPress}
+              >
+                {tempCoordinates && (
+                  <Marker
+                    coordinate={{
+                      latitude: tempCoordinates.latitude,
+                      longitude: tempCoordinates.longitude,
+                    }}
+                  />
+                )}
+              </MapView>
+            </View>
+            <View style={styles.modalFooter}>
+              <Text style={styles.modalHint}>Tap on the map to select a location</Text>
+              <Button
+                title="Confirm Location"
+                variant="primary"
+                onPress={handleConfirmLocation}
+                fullWidth
+              />
+            </View>
+          </View>
+        </View>
+      )}
     </KeyboardAvoidingView>
   );
 }
@@ -419,5 +524,63 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 8,
+  },
+  locationButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    backgroundColor: Colors.primaryBg,
+    padding: 14,
+    borderRadius: 10,
+  },
+  locationButtonText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '500',
+  },
+  modalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'flex-end',
+  },
+  modalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  modalContent: {
+    backgroundColor: Colors.surface,
+    borderTopLeftRadius: 24,
+    borderTopRightRadius: 24,
+    padding: 20,
+    paddingBottom: 34,
+    height: '70%',
+  },
+  modalHeader: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 16,
+  },
+  modalTitle: {
+    fontSize: 18,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  mapContainer: {
+    flex: 1,
+    borderRadius: 16,
+    overflow: 'hidden',
+  },
+  map: {
+    flex: 1,
+  },
+  modalFooter: {
+    marginTop: 16,
+    gap: 12,
+  },
+  modalHint: {
+    fontSize: 13,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
 });

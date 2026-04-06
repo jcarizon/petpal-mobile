@@ -29,14 +29,18 @@ function RootLayoutNav() {
   // Re-sync push token every time the user becomes authenticated
   // This covers: first login, app reopen, token rotation
   useEffect(() => {
-    if (isAuthenticated) {
-      registerForPushNotifications().catch((err) => {
-        console.warn('Push registration failed silently:', err);
-      });
-      registerForPushNotifications().then((token) => {
+    if (!isAuthenticated) return;
+
+    const register = async () => {
+      try {
+        const token = await registerForPushNotifications();
         console.log('Push token:', token);
-      });
-    }
+      } catch (err) {
+        console.warn('Push registration failed silently:', err);
+      }
+    };
+
+    register();
   }, [isAuthenticated]);
 
   return (
@@ -52,14 +56,9 @@ function RootLayoutNav() {
 }
 
 function AppChrome() {
-  const insets = useSafeAreaInsets();
-
   return (
     <View style={styles.container}>
-      <View style={[styles.topHeader, { height: insets.top }]} />
-      <View style={styles.content}>
-        <RootLayoutNav />
-      </View>
+      <RootLayoutNav />
     </View>
   );
 }
@@ -68,7 +67,7 @@ export default function RootLayout() {
   return (
     <QueryClientProvider client={queryClient}>
       <SafeAreaProvider>
-        <StatusBar style="light" backgroundColor={Colors.primary} translucent={false} />
+        <StatusBar style="dark" />
         <ToastProvider>
           <AppChrome />
         </ToastProvider>
@@ -81,11 +80,5 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
-  },
-  topHeader: {
-    backgroundColor: Colors.primary,
-  },
-  content: {
-    flex: 1,
   },
 });

@@ -118,7 +118,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return false;
       }
 
-      const response = await api.get<User>('/users/me');
+      const response = await api.get<User>('/auth/profile');
       set({ user: response.data, isAuthenticated: true, isLoading: false });
       return true;
     } catch {
@@ -131,7 +131,7 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (data: Partial<User>) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.put<User>('/users/me', data);
+      const response = await api.put<User>('/auth/profile', data);
       set({ user: response.data, isLoading: false });
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Update failed';

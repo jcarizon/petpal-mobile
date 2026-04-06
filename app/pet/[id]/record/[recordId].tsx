@@ -1,4 +1,4 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useMemo } from 'react';
 import {
   View,
   Text,
@@ -11,6 +11,8 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { LinearGradient } from 'expo-linear-gradient';
+import { Edit3, Trash2, ArrowLeft } from 'lucide-react-native';
 import { Colors } from '../../../../constants/colors';
 import { Input } from '../../../../components/ui/Input';
 import { Button } from '../../../../components/ui/Button';
@@ -37,6 +39,7 @@ export default function EditHealthRecordScreen() {
   const { showToast } = useToast();
 
   const record = healthRecords[id ?? '']?.find((r) => r.id === recordId);
+  const [isEditing, setIsEditing] = useState(false);
 
   const [type, setType] = useState<HealthRecordType>('vaccination');
   const [title, setTitle] = useState('');
@@ -45,6 +48,15 @@ export default function EditHealthRecordScreen() {
   const [notes, setNotes] = useState('');
   const [nextDueDate, setNextDueDate] = useState<Date | null>(null);
   const [errors, setErrors] = useState<{ title?: string; date?: string; nextDueDate?: string }>({});
+
+  const isFormValid = useMemo(() => {
+    const trimmedTitle = title.trim();
+    const hasValidTitle = trimmedTitle.length >= 3;
+    const isDateInFuture = date.getTime() > Date.now();
+    const isNextDueBeforeDate = nextDueDate ? nextDueDate.getTime() < date.getTime() : false;
+
+    return hasValidTitle && !isDateInFuture && !isNextDueBeforeDate;
+  }, [title, date, nextDueDate]);
 
   useEffect(() => {
     if (record) {
@@ -148,111 +160,154 @@ export default function EditHealthRecordScreen() {
     );
   };
 
+  const recordTypeInfo = useMemo(() => RECORD_TYPES.find((rt) => rt.key === record?.type), [record?.type]);
+
   return (
-    <KeyboardAvoidingView
-      style={styles.container}
-      behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
-    >
-      <ScreenHeader
-        title="Edit Health Record"
-        subtitle="Update or delete this record"
-      />
-      <ScrollView
-        contentContainerStyle={styles.content}
-        keyboardShouldPersistTaps="handled"
-        showsVerticalScrollIndicator={false}
-      >
-        {/* Record type selector */}
-        <View style={styles.typeSection}>
-          <Text style={styles.label}>Record Type</Text>
-          <View style={styles.typeOptions}>
-            {RECORD_TYPES.map((rt) => (
-              <TouchableOpacity
-                key={rt.key}
-                style={[styles.typeOption, type === rt.key && styles.typeOptionSelected]}
-                onPress={() => setType(rt.key)}
-              >
-                <Text style={styles.typeEmoji}>{rt.emoji}</Text>
-                <Text style={[styles.typeLabel, type === rt.key && styles.typeLabelSelected]}>
-                  {rt.label}
-                </Text>
-              </TouchableOpacity>
-            ))}
+    <>
+      {isEditing ? (
+        <KeyboardAvoidingView
+          style={styles.container}
+          behavior={Platform.OS === 'ios' ? 'padding' : 'height'}
+        >
+          <ScreenHeader
+            title="Edit Health Record"
+            subtitle="Update or delete this record"
+          />
+          <ScrollView
+            contentContainerStyle={styles.content}
+            keyboardShouldPersistTaps="handled"
+            showsVerticalScrollIndicator={false}
+          >
+            <View style={styles.typeSection}>
+              <Text style={styles.label}>Record Type</Text>
+              <View style={styles.typeOptions}>
+                {RECORD_TYPES.map((rt) => (
+                  <TouchableOpacity
+                    key={rt.key}
+                    style={[styles.typeOption, type === rt.key && styles.typeOptionSelected]}
+                    onPress={() => setType(rt.key)}
+                  >
+                    <Text style={styles.typeEmoji}>{rt.emoji}</Text>
+                    <Text style={[styles.typeLabel, type === rt.key && styles.typeLabelSelected]}>{rt.label}</Text>
+                  </TouchableOpacity>
+                ))}
+              </View>
+            </View>
+
+            <Input
+              label="Title *"
+              placeholder="e.g., Annual rabies vaccine"
+              value={title}
+              onChangeText={(text) => {
+                setTitle(text);
+                if (errors.title) setErrors((prev) => ({ ...prev, title: undefined }));
+              }}
+              error={errors.title}
+            />
+
+            <DateTimeField
+              label="Date & Time *"
+              value={date}
+              onChange={(value) => {
+                setDate(value);
+                if (errors.date) setErrors((prev) => ({ ...prev, date: undefined }));
+              }}
+              mode="datetime"
+              maximumDate={new Date()}
+              error={errors.date}
+            />
+
+            <Input
+              label="Veterinarian (optional)"
+              placeholder="Dr. Smith"
+              value={vetName}
+              onChangeText={setVetName}
+            />
+
+            <Input
+              label="Notes (optional)"
+              placeholder="Any additional notes..."
+              value={notes}
+              onChangeText={setNotes}
+              multiline
+              numberOfLines={3}
+            />
+
+            <DateTimeField
+              label="Next Due Date (optional)"
+              value={nextDueDate}
+              onChange={setNextDueDate}
+              mode="date"
+              minimumDate={date}
+              error={errors.nextDueDate}
+            />
+
+            <Button
+              title="Save Changes"
+              onPress={handleSubmit}
+              fullWidth
+              size="lg"
+              disabled={isLoading || !isFormValid}
+            />
+
+            <View style={styles.deleteButtonContainer}>
+              <Button
+                title="Delete Record"
+                variant="ghost"
+                onPress={handleDelete}
+                fullWidth
+                size="lg"
+                style={styles.deleteButton}
+              />
+            </View>
+          </ScrollView>
+        </KeyboardAvoidingView>
+      ) : (
+        <SafeAreaView style={styles.viewContainer}>
+          <View style={styles.viewHeader}>
+            <TouchableOpacity onPress={() => router.back()} style={styles.backButton}>
+              <ArrowLeft size={20} color={Colors.textSecondary} />
+            </TouchableOpacity>
+            <Text style={styles.viewTitle}>Health Record</Text>
+            <TouchableOpacity onPress={() => setIsEditing(true)} style={styles.editButton}>
+              <Edit3 size={20} color={Colors.primary} />
+            </TouchableOpacity>
           </View>
-        </View>
-
-        <Input
-          label="Title *"
-          placeholder="e.g., Annual rabies vaccine"
-          value={title}
-          onChangeText={(text) => {
-            setTitle(text);
-            if (errors.title) setErrors((prev) => ({ ...prev, title: undefined }));
-          }}
-          error={errors.title}
-        />
-
-        <DateTimeField
-          label="Date & Time *"
-          value={date}
-          onChange={(value) => {
-            setDate(value);
-            if (errors.date) setErrors((prev) => ({ ...prev, date: undefined }));
-          }}
-          mode="datetime"
-          maximumDate={new Date()}
-          error={errors.date}
-        />
-
-        <Input
-          label="Veterinarian (optional)"
-          placeholder="Dr. Smith"
-          value={vetName}
-          onChangeText={setVetName}
-        />
-
-        <Input
-          label="Notes (optional)"
-          placeholder="Additional notes..."
-          value={notes}
-          onChangeText={setNotes}
-          multiline
-          numberOfLines={3}
-          style={{ minHeight: 80, textAlignVertical: 'top' }}
-        />
-
-        <DateTimeField
-          label="Next Due Date (optional)"
-          value={nextDueDate}
-          onChange={(value) => {
-            setNextDueDate(value);
-            if (errors.nextDueDate) setErrors((prev) => ({ ...prev, nextDueDate: undefined }));
-          }}
-          mode="date"
-          minimumDate={date}
-          error={errors.nextDueDate}
-        />
-
-        <Button
-          title="Save Changes"
-          variant="primary"
-          onPress={handleSubmit}
-          isLoading={isLoading}
-          fullWidth
-          size="lg"
-          style={styles.submitButton}
-        />
-
-        <Button
-          title="Delete Record"
-          variant="ghost"
-          onPress={handleDelete}
-          fullWidth
-          size="lg"
-          style={styles.deleteButton}
-        />
-      </ScrollView>
-    </KeyboardAvoidingView>
+          <ScrollView contentContainerStyle={styles.viewContent} showsVerticalScrollIndicator={false}>
+            <View style={styles.viewCard}>
+              <View style={styles.viewTypeRow}>
+                <Text style={styles.viewTypeEmoji}>{recordTypeInfo?.emoji}</Text>
+                <View style={styles.viewTypeInfo}>
+                  <Text style={styles.viewTypeLabel}>{recordTypeInfo?.label}</Text>
+                  <Text style={styles.viewDate}>{record ? new Date(record.date).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' }) : ''}</Text>
+                </View>
+              </View>
+              <Text style={styles.viewTitleText}>{record?.title}</Text>
+              {record?.notes && (
+                <View style={styles.viewNotesSection}>
+                  <Text style={styles.viewNotesLabel}>Notes</Text>
+                  <Text style={styles.viewNotesText}>{record.notes}</Text>
+                </View>
+              )}
+              {record?.vetName && (
+                <View style={styles.viewField}>
+                  <Text style={styles.viewFieldLabel}>Veterinarian</Text>
+                  <Text style={styles.viewFieldText}>{record.vetName}</Text>
+                </View>
+              )}
+              {record?.nextDueDate && (
+                <View style={styles.viewField}>
+                  <Text style={styles.viewFieldLabel}>Next Due</Text>
+                  <Text style={styles.viewFieldText}>
+                    {new Date(record.nextDueDate).toLocaleDateString('en-US', { weekday: 'short', year: 'numeric', month: 'short', day: 'numeric' })}
+                  </Text>
+                </View>
+              )}
+            </View>
+          </ScrollView>
+        </SafeAreaView>
+)}
+    </>
   );
 }
 
@@ -260,6 +315,94 @@ const styles = StyleSheet.create({
   container: {
     flex: 1,
     backgroundColor: Colors.background,
+  },
+  viewContainer: {
+    flex: 1,
+    backgroundColor: Colors.background,
+  },
+  viewHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 16,
+    paddingVertical: 12,
+  },
+  backButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.neutral100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewTitle: {
+    fontSize: 17,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  editButton: {
+    width: 36,
+    height: 36,
+    borderRadius: 18,
+    backgroundColor: Colors.primaryBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  viewContent: {
+    padding: 20,
+  },
+  viewCard: {
+    backgroundColor: Colors.surface,
+    borderRadius: 16,
+    padding: 16,
+    gap: 12,
+  },
+  viewTypeRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
+  viewTypeEmoji: {
+    fontSize: 32,
+  },
+  viewTypeInfo: {
+    flex: 1,
+  },
+  viewTypeLabel: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  viewDate: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  viewTitleText: {
+    fontSize: 20,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  viewNotesSection: {
+    marginTop: 8,
+  },
+  viewNotesLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginBottom: 4,
+  },
+  viewNotesText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
+  },
+  viewField: {
+    marginTop: 4,
+  },
+  viewFieldLabel: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+  },
+  viewFieldText: {
+    fontSize: 15,
+    color: Colors.textPrimary,
   },
   content: {
     padding: 20,
@@ -307,6 +450,9 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 8,
+  },
+  deleteButtonContainer: {
+    marginTop: 16,
   },
   deleteButton: {
     marginTop: 8,

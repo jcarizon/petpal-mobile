@@ -1,5 +1,5 @@
 import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Button } from '../ui/Button';
 import { ShareButton } from '../ui/ShareButton';
 import { Colors } from '../../constants/colors';
@@ -21,56 +21,79 @@ export function AlertCard({ alert, userLatitude, userLongitude, onPress }: Alert
       : null;
 
   const isLost = alert.type === 'lost';
-  // Compose the last seen description
   const lastSeen = alert.description || `Last seen near ${alert.city}${alert.petName ? ", " + alert.petName : ''}.`;
-  // Compose pet details (gender, age, collar, etc.)
-  // For demo, using static values as in screenshot; replace with real fields if available
   const petDetails = `Male, 3 years old, wearing blue collar.`;
-  // Compose notification text using dynamic sighting count
   const notificationText = `${alert.sightingCount} people within 2km have been notified`;
 
+  const [scale] = React.useState(new Animated.Value(1));
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
+
   return (
-    <View style={styles.card}>
-      {/* Top row: avatar, LOST badge, time */}
-      <View style={styles.topRow}>
-        <View style={styles.imageContainer}>
-          {alert.photoUrl ? (
-            <Image source={{ uri: alert.photoUrl }} style={styles.image} />
-          ) : (
-            <View style={styles.imagePlaceholder}>
-              <Text style={styles.imagePlaceholderText}>🐾</Text>
-            </View>
-          )}
-        </View>
-        <View style={styles.topInfo}>
-          <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-            <Badge
-              label={isLost ? 'LOST' : 'FOUND'}
-              style={styles.typeBadge}
-              backgroundColor={isLost ? Colors.alertLost : Colors.alertFound}
-              color={Colors.textInverse}
-              size="sm"
-            />
-            <Text style={styles.timeTop}>{formatRelativeDate(new Date(alert.createdAt))}</Text>
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={styles.card}
+        activeOpacity={0.85}
+        onPress={onPress}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+      >
+        {/* Top row: avatar, LOST badge, time */}
+        <View style={styles.topRow}>
+          <View style={styles.imageContainer}>
+            {alert.photoUrl ? (
+              <Image source={{ uri: alert.photoUrl }} style={styles.image} />
+            ) : (
+              <View style={styles.imagePlaceholder}>
+                <Text style={styles.imagePlaceholderText}>🐾</Text>
+              </View>
+            )}
           </View>
-          <Text style={styles.title} numberOfLines={1}>
-            {alert.petName ? `${alert.petName} - ${alert.petBreed || ''}`.trim() : alert.title}
-          </Text>
+          <View style={styles.topInfo}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Badge
+                label={isLost ? 'LOST' : 'FOUND'}
+                style={styles.typeBadge}
+                backgroundColor={isLost ? Colors.alertLost : Colors.alertFound}
+                color={Colors.textInverse}
+                size="sm"
+              />
+              <Text style={styles.timeTop}>{formatRelativeDate(new Date(alert.createdAt))}</Text>
+            </View>
+            <Text style={styles.title} numberOfLines={1}>
+              {alert.petName ? `${alert.petName} - ${alert.petBreed || ''}`.trim() : alert.title}
+            </Text>
+          </View>
         </View>
-      </View>
 
-      {/* Description */}
-      <Text style={styles.description} numberOfLines={2}>{lastSeen} {petDetails}</Text>
+        {/* Description */}
+        <Text style={styles.description} numberOfLines={2}>{lastSeen} {petDetails}</Text>
 
-      {/* Action buttons */}
-      <View style={styles.actionsRow}>
-        <Button title={isLost ? `I Saw ${alert.petName || 'this pet'}!` : 'This is my pet!'} variant="primary" size="md" style={styles.actionButton} onPress={onPress} />
-        <ShareButton message={`Help find ${alert.petName || alert.title}! ${lastSeen}`} style={styles.actionButton} />
-      </View>
+        {/* Action buttons */}
+        <View style={styles.actionsRow}>
+          <Button title={isLost ? `I Saw ${alert.petName || 'this pet'}!` : 'This is my pet!'} variant="primary" size="md" style={styles.actionButton} onPress={onPress} />
+          <ShareButton message={`Help find ${alert.petName || alert.title}! ${lastSeen}`} style={styles.actionButton} />
+        </View>
 
-      {/* Notification text */}
-      <Text style={styles.notificationText}>{notificationText}</Text>
-    </View>
+        {/* Notification text */}
+        <Text style={styles.notificationText}>{notificationText}</Text>
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -80,11 +103,8 @@ const styles = StyleSheet.create({
     borderRadius: 14,
     padding: 16,
     marginBottom: 14,
-    shadowColor: Colors.neutral900,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.06,
-    shadowRadius: 4,
-    elevation: 2,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   topRow: {
     flexDirection: 'row',
