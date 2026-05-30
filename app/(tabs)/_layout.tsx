@@ -1,6 +1,6 @@
 import { Tabs } from 'expo-router';
 import { Redirect } from 'expo-router';
-import { Home, PawPrint, BellRing, MapPinned, UserRound } from 'lucide-react-native';
+import { BellRing, PawPrint, MapPinned, UserRound } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { useAuthStore } from '../../store/authStore';
 
@@ -51,15 +51,14 @@ export default function TabsLayout() {
         tabBarIconStyle: {
           marginBottom: -2,
         },
-        // Add animation for active tab (optional, can be further enhanced)
       }}
     >
       <Tabs.Screen
         name="index"
         options={{
-          title: 'Home',
+          title: 'Community',
           tabBarIcon: ({ color, size, focused }) => (
-            <Home size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
+            <BellRing size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
           ),
         }}
       />
@@ -73,15 +72,6 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="community"
-        options={{
-          title: 'Community',
-          tabBarIcon: ({ color, size, focused }) => (
-            <BellRing size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
-          ),
-        }}
-      />
-      <Tabs.Screen
         name="services"
         options={{
           title: 'Services',
@@ -91,9 +81,9 @@ export default function TabsLayout() {
         }}
       />
       <Tabs.Screen
-        name="profile"
+        name="me"
         options={{
-          title: 'Profile',
+          title: 'Me',
           tabBarIcon: ({ color, size, focused }) => (
             <UserRound size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
           ),

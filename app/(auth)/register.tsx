@@ -54,16 +54,10 @@ export default function RegisterScreen() {
     if (!validate()) return;
 
     try {
-      await register({
-        name: name.trim(),
-        email: email.trim(),
-        phone: phone.trim() || undefined,
-        password,
-        city,
-      });
+      await register({ name, email, phone, password, city });
       router.replace('/(tabs)');
     } catch {
-      // Error displayed from store
+      // Error displayed by store
     }
   };
 

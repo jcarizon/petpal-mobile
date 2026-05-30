@@ -1,234 +1,267 @@
-import React, { useEffect } from 'react';
+import React, { useEffect, useCallback, useMemo, useState } from 'react';
 import {
   View,
   Text,
   StyleSheet,
-  ScrollView,
-  TouchableOpacity,
-  RefreshControl,
+  FlatList,
   Pressable,
-  Image,
+  RefreshControl,
+  TouchableOpacity,
+  Linking,
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Plus, Syringe, Search, Megaphone, Sparkles, CircleDashed, Star, Fish, Bird, Rabbit } from 'lucide-react-native';
+import { BellOff, Plus, Bell, Search, SlidersHorizontal, MapPin, Navigation } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
-import { PetCard } from '../../components/pet/PetCard';
 import { AlertCard } from '../../components/community/AlertCard';
-import { Card, PageBanner } from '../../components/ui';
+import { Tabs } from '../../components/ui/Tabs';
+import { EmptyState } from '../../components/ui/EmptyState';
 import { Loading } from '../../components/ui/Loading';
-import { useAuthStore } from '../../store/authStore';
-import { usePetStore } from '../../store/petStore';
+import { PageBanner } from '../../components/ui';
 import { useCommunityStore } from '../../store/communityStore';
-import { getGreeting } from '../../lib/utils';
 import { useLocation } from '../../hooks/useLocation';
+import { Alert as AlertType, AlertType as AlertTypeEnum } from '../../types';
 
-export default function HomeScreen() {
+const TABS = [
+  { key: 'all',      label: 'All'      },
+  { key: 'lost',     label: 'Lost'     },
+  { key: 'found',    label: 'Found'    },
+  { key: 'adoption', label: 'Adoption' },
+  { key: 'playmate', label: 'Playmate' },
+];
+
+export default function CommunityScreen() {
   const router = useRouter();
-  const { user } = useAuthStore();
+  const { alerts, fetchAlerts, isLoading, activeFilters } = useCommunityStore();
   const {
-    pets,
-    fetchPets,
-    healthScores,
-    fetchHealthRecords,
-    isLoading: petsLoading,
-  } = usePetStore();
-  const { alerts, fetchAlerts, isLoading: alertsLoading } = useCommunityStore();
-  const { coordinates } = useLocation();
-  const [refreshing, setRefreshing] = React.useState(false);
+    coordinates,
+    hasPermission,
+    isLoading: locationLoading,
+    error: locationError,
+    getCurrentLocation,
+    requestPermission,
+  } = useLocation();
 
+  const [activeTab, setActiveTab]   = useState('all');
+  const [refreshing, setRefreshing] = useState(false);
+  // Request location on mount
   useEffect(() => {
-    fetchPets();
-    fetchAlerts({ radiusKm: 10 });
-  }, [fetchPets, fetchAlerts]);
+    getCurrentLocation();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
+  const mergedFilters = useMemo(() => ({
+    ...activeFilters,
+    type:      activeTab === 'all' ? undefined : activeTab as AlertTypeEnum,
+    latitude:  coordinates?.latitude,
+    longitude: coordinates?.longitude,
+  }), [activeFilters, activeTab, coordinates]);
+
+  const load = useCallback(() => {
+    fetchAlerts(mergedFilters);
+  }, [fetchAlerts, mergedFilters]);
+
+  // Only fetch alerts when we actually have coordinates
   useEffect(() => {
-    pets.forEach((pet) => {
-      const existingScore = healthScores[pet.id];
-      if (!existingScore || existingScore.score == null) {
-        fetchHealthRecords(pet.id);
-      }
-    });
-  }, [pets, healthScores, fetchHealthRecords]);
+    if (coordinates) load();
+  }, [load, coordinates]);
 
   const handleRefresh = async () => {
     setRefreshing(true);
-    await Promise.all([fetchPets(), fetchAlerts({ radiusKm: 10 })]);
+    await getCurrentLocation();
+    await fetchAlerts(mergedFilters);
     setRefreshing(false);
   };
 
-  const recentAlerts = alerts.slice(0, 3);
-  const greeting = getGreeting();
-  const userName = user?.name?.split(' ')[0] ?? 'Friend';
-  const petLabel = `${pets.length} pet${pets.length === 1 ? '' : 's'}`;
-  const alertLabel = `${recentAlerts.length} alert${recentAlerts.length === 1 ? '' : 's'}`;
+  const handleEnableLocation = async () => {
+    const granted = await requestPermission();
+    if (granted) {
+      await getCurrentLocation();
+    } else {
+      // Open app settings so user can grant it manually
+      Linking.openSettings();
+    }
+  };
+
+  const filterCount = useMemo(() => {
+    let n = 0;
+    if (activeFilters.search?.trim())                          n++;
+    if (activeFilters.species)                                 n++;
+    if (activeFilters.breed?.trim())                           n++;
+    if (activeFilters.dateRange && activeFilters.dateRange !== 'any') n++;
+    if (activeFilters.sortBy === 'nearest')                    n++;
+    if (activeFilters.radiusKm && activeFilters.radiusKm !== 10) n++;
+    return n;
+  }, [activeFilters]);
+
+  // ── Location permission gate ──────────────────────────────────────────────
+  if (!locationLoading && !hasPermission && !coordinates) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PageBanner
+          title="Community"
+          subtitle="Find and report lost or found pets in your neighborhood."
+          iconNode={<BellOff size={18} color={Colors.textInverse} />}
+          rightNode={
+            <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/notifications')}>
+              <Bell size={18} color={Colors.textInverse} />
+            </TouchableOpacity>
+          }
+        />
+        <View style={styles.permissionContainer}>
+          <View style={styles.permissionIconWrap}>
+            <MapPin size={40} color={Colors.primary} />
+          </View>
+          <Text style={styles.permissionTitle}>Location Required</Text>
+          <Text style={styles.permissionBody}>
+            PetPal uses your location to show lost pets, found animals, and community alerts within 10 km of you. Your location is never shared publicly.
+          </Text>
+          <TouchableOpacity style={styles.permissionBtn} onPress={handleEnableLocation}>
+            <Navigation size={16} color={Colors.surface} />
+            <Text style={styles.permissionBtnText}>Enable Location Access</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Getting location ──────────────────────────────────────────────────────
+  if (locationLoading && !coordinates) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PageBanner
+          title="Community"
+          subtitle="Find and report lost or found pets in your neighborhood."
+          iconNode={<BellOff size={18} color={Colors.textInverse} />}
+        />
+        <View style={styles.permissionContainer}>
+          <Loading />
+          <Text style={styles.locationLoadingText}>Getting your location…</Text>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Location error (GPS failed, no coords) ────────────────────────────────
+  if (!coordinates && locationError) {
+    return (
+      <SafeAreaView style={styles.container} edges={['top']}>
+        <PageBanner
+          title="Community"
+          subtitle="Find and report lost or found pets in your neighborhood."
+          iconNode={<BellOff size={18} color={Colors.textInverse} />}
+        />
+        <View style={styles.permissionContainer}>
+          <View style={styles.permissionIconWrap}>
+            <Navigation size={40} color={Colors.error} />
+          </View>
+          <Text style={styles.permissionTitle}>Location Unavailable</Text>
+          <Text style={styles.permissionBody}>
+            Unable to get your location. A location is required to show nearby alerts within your area.
+          </Text>
+          <TouchableOpacity style={styles.permissionBtn} onPress={handleEnableLocation}>
+            <Navigation size={16} color={Colors.surface} />
+            <Text style={styles.permissionBtnText}>Retry Location</Text>
+          </TouchableOpacity>
+        </View>
+      </SafeAreaView>
+    );
+  }
+
+  // ── Main screen ───────────────────────────────────────────────────────────
+  if (isLoading && alerts.length === 0) {
+    return <Loading fullScreen />;
+  }
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-        <ScrollView
-          contentContainerStyle={styles.contentContainer}
-          showsVerticalScrollIndicator={false}
+      <PageBanner
+        title="Community"
+        subtitle="Find and report lost or found pets in your neighborhood."
+        helper={coordinates ? `Showing alerts within ${activeFilters.radiusKm ?? 10} km of you.` : undefined}
+        iconNode={<BellOff size={18} color={Colors.textInverse} />}
+        rightNode={
+          <View style={styles.headerButtons}>
+            <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/notifications')}>
+              <Bell size={18} color={Colors.textInverse} />
+            </TouchableOpacity>
+            <TouchableOpacity
+              style={[styles.headerBtn, { backgroundColor: Colors.textInverse }]}
+              onPress={() => router.push('/alert/create')}
+            >
+              <Plus size={18} color={Colors.primary} />
+            </TouchableOpacity>
+          </View>
+        }
+      />
+
+      {/* Search bar */}
+      <TouchableOpacity
+        style={styles.searchBar}
+        activeOpacity={0.7}
+        onPress={() => router.push('/community/filter')}
+      >
+        <Search size={16} color={Colors.textSecondary} />
+        <Text
+          style={[styles.searchBarText, activeFilters.search ? styles.searchBarTextFilled : null]}
+          numberOfLines={1}
+        >
+          {activeFilters.search?.trim() || 'Search alerts…'}
+        </Text>
+        <View style={styles.searchBarRight}>
+          {filterCount > 0 && (
+            <View style={styles.filterBadge}>
+              <Text style={styles.filterBadgeText}>{filterCount}</Text>
+            </View>
+          )}
+          <SlidersHorizontal size={16} color={filterCount > 0 ? Colors.primary : Colors.textSecondary} />
+        </View>
+      </TouchableOpacity>
+
+      {/* Type tabs */}
+      <View style={styles.tabsContainer}>
+        <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+      </View>
+
+      {/* Alert list */}
+      <FlatList
+        data={alerts as AlertType[]}
+        keyExtractor={(item) => item.id}
+        contentContainerStyle={styles.list}
+        ItemSeparatorComponent={() => <View style={styles.alertGap} />}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
         }
         contentInsetAdjustmentBehavior="never"
+        ListEmptyComponent={
+          <EmptyState
+            iconNode={<BellOff size={54} color={Colors.textSecondary} />}
+            title="No alerts in your area"
+            description={`No alerts found within ${activeFilters.radiusKm ?? 10} km. Try increasing the radius in filters.`}
+            actionLabel="Report Alert"
+            onAction={() => router.push('/alert/create')}
+          />
+        }
+        renderItem={({ item }) => (
+          <AlertCard
+            alert={item}
+            userLatitude={coordinates?.latitude}
+            userLongitude={coordinates?.longitude}
+            onPress={() => router.push(`/alert/${item.id}`)}
+            onSightingsPress={() => router.push(`/alert/${item.id}?openModal=sightings`)}
+            onFormPress={() => router.push(`/alert/${item.id}?openModal=form`)}
+          />
+        )}
+      />
+
+      {/* FAB — create alert */}
+      <Pressable
+        style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
+        onPress={() => router.push('/alert/create')}
       >
-        <PageBanner
-          title={`${greeting}, ${userName}`}
-          subtitle="Everything your pet needs, in one place."
-          helper={`${petLabel} · ${alertLabel} nearby`}
-          iconNode={
-            <View style={styles.bannerIconRow}>
-              <Sparkles size={14} color={Colors.textInverse} />
-              <Star size={12} color={Colors.textInverse} />
-            </View>
-          }
-          rightNode={
-            <View style={styles.bannerAvatar}>
-              <Text style={styles.bannerAvatarText}>{user?.name?.charAt(0).toUpperCase() ?? 'U'}</Text>
-              <View style={styles.bannerAvatarBadge}>
-                <Star size={10} color={Colors.textInverse} fill={Colors.textInverse} />
-              </View>
-            </View>
-          }
-        />
+        <Plus size={24} color={Colors.textInverse} />
+      </Pressable>
 
-        {/* Pet Carousel */}
-        <View style={[styles.section, styles.sectionCard]}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <CircleDashed size={18} color={Colors.primary} />
-              <Text style={styles.sectionTitle}>My Pets</Text>
-            </View>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/pets')}>
-              <Text style={styles.seeAll}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {petsLoading ? (
-            <Loading size="small" />
-          ) : pets.length === 0 ? (
-            <Card style={styles.emptyPets}>
-              <View style={styles.emptyPetsDecor}>
-                <CircleDashed size={32} color={Colors.primaryLight} />
-              </View>
-              <Text style={styles.emptyPetsText}>Add your first furry friend</Text>
-              <TouchableOpacity
-                style={styles.addPetButton}
-                onPress={() => router.push('/pet/add')}
-              >
-                <Text style={styles.addPetButtonText}>+ Add Pet</Text>
-              </TouchableOpacity>
-            </Card>
-          ) : (
-            <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={styles.petRow}>
-              {pets.map((pet) => (
-                <PetCard
-                  key={pet.id}
-                  pet={pet}
-                  onPress={() => router.push(`/pet/${pet.id}`)}
-                  healthScore={healthScores[pet.id]?.score ?? null}
-                />
-              ))}
-              <TouchableOpacity
-                style={styles.addPetCard}
-                activeOpacity={0.82}
-                onPress={() => router.push('/pet/add')}
-              >
-                <View style={styles.addPetIcon}>
-                  <Plus size={28} color={Colors.primary} />
-                </View>
-                <Text style={styles.addPetCardText}>Add Pet</Text>
-              </TouchableOpacity>
-            </ScrollView>
-          )}
-        </View>
-
-        {/* Quick Actions */}
-        <View style={styles.section}>
-          <View style={styles.sectionTitleRow}>
-            <Star size={18} color={Colors.secondary} />
-            <Text style={styles.sectionTitle}>Quick Actions</Text>
-          </View>
-          <View style={styles.quickActions}>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
-                pressed && styles.pressedScale,
-              ]}
-              onPress={() => router.push('/pet/add')}
-            >
-              <View style={[styles.quickActionIconWrap, { backgroundColor: Colors.primary }]}>
-                <Syringe size={16} color={Colors.textInverse} />
-              </View>
-              <Text style={[styles.quickActionText, { color: Colors.primary }]}>Add Record</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                { backgroundColor: '#FEF2F2', borderColor: Colors.error },
-                pressed && styles.pressedScale,
-              ]}
-              onPress={() => router.push('/alert/create')}
-            >
-              <View style={[styles.quickActionIconWrap, { backgroundColor: Colors.error }]}>
-                <Megaphone size={16} color={Colors.textInverse} />
-              </View>
-              <Text style={[styles.quickActionText, { color: Colors.error }]}>Report Lost</Text>
-            </Pressable>
-            <Pressable
-              style={({ pressed }) => [
-                styles.quickAction,
-                { backgroundColor: Colors.secondaryBg, borderColor: Colors.secondary },
-                pressed && styles.pressedScale,
-              ]}
-              onPress={() => router.push('/(tabs)/services')}
-            >
-              <View style={[styles.quickActionIconWrap, { backgroundColor: Colors.secondary }]}>
-                <Search size={16} color={Colors.textInverse} />
-              </View>
-              <Text style={[styles.quickActionText, { color: Colors.secondary }]}>Services</Text>
-            </Pressable>
-          </View>
-        </View>
-
-        {/* Community Alerts Snippet */}
-        <View style={[styles.section, styles.sectionCard]}>
-          <View style={styles.sectionHeader}>
-            <View style={styles.sectionTitleRow}>
-              <Megaphone size={18} color={Colors.error} />
-              <Text style={styles.sectionTitle}>Community Alerts</Text>
-            </View>
-            <TouchableOpacity onPress={() => router.push('/(tabs)/community')}>
-              <Text style={styles.seeAll}>See all</Text>
-            </TouchableOpacity>
-          </View>
-
-          {alertsLoading ? (
-            <Loading size="small" />
-          ) : recentAlerts.length === 0 ? (
-            <View style={styles.noAlertsContainer}>
-              <CircleDashed size={24} color={Colors.neutral300} />
-              <Text style={styles.noAlertsText}>No alerts nearby</Text>
-              <Text style={styles.noAlertsSubtext}>Your neighborhood is safe!</Text>
-            </View>
-          ) : (
-            <View style={styles.alertsList}>
-              {recentAlerts.map((alert, index) => (
-                <View key={alert.id} style={styles.alertItem}>
-                  <AlertCard
-                    alert={alert}
-                    userLatitude={coordinates?.latitude}
-                    userLongitude={coordinates?.longitude}
-                    onPress={() => router.push(`/alert/${alert.id}`)}
-                  />
-                </View>
-              ))}
-            </View>
-          )}
-        </View>
-      </ScrollView>
     </SafeAreaView>
   );
 }
@@ -238,199 +271,141 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  contentContainer: {
-    paddingTop: 0,
-    paddingBottom: 132,
-  },
-  bannerIconRow: {
+  headerButtons: {
     flexDirection: 'row',
-    gap: 4,
-    alignItems: 'center',
+    gap: 8,
   },
-  bannerAvatar: {
-    width: 56,
-    height: 56,
+  headerBtn: {
+    width: 36,
+    height: 36,
     borderRadius: 18,
     backgroundColor: 'rgba(255,255,255,0.2)',
-    borderWidth: 2,
-    borderColor: 'rgba(255,255,255,0.35)',
     alignItems: 'center',
     justifyContent: 'center',
-    position: 'relative',
   },
-  bannerAvatarText: {
+  // ── Permission ──
+  permissionContainer: {
+    flex: 1,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 36,
+    gap: 16,
+  },
+  permissionIconWrap: {
+    width: 80,
+    height: 80,
+    borderRadius: 40,
+    backgroundColor: Colors.primaryBg,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginBottom: 4,
+  },
+  permissionTitle: {
     fontSize: 20,
     fontWeight: '800',
-    color: Colors.textInverse,
+    color: Colors.textPrimary,
+    textAlign: 'center',
   },
-  bannerAvatarBadge: {
-    position: 'absolute',
-    right: -4,
-    bottom: -4,
-    width: 22,
-    height: 22,
-    borderRadius: 12,
-    backgroundColor: Colors.secondary,
-    borderWidth: 2,
-    borderColor: Colors.surface,
-    alignItems: 'center',
-    justifyContent: 'center',
+  permissionBody: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    textAlign: 'center',
+    lineHeight: 22,
   },
-  section: {
-    paddingHorizontal: 20,
-    marginTop: 18,
-    marginBottom: 10,
-    gap: 12,
-  },
-  sectionCard: {
-    marginHorizontal: 20,
-    marginTop: 0,
-    marginBottom: 4,
-    paddingHorizontal: 14,
-    paddingTop: 14,
-    paddingBottom: 14,
-    borderRadius: 18,
-    backgroundColor: Colors.surface,
-    borderWidth: 1,
-    borderColor: Colors.border,
-    shadowColor: Colors.neutral900,
-    shadowOffset: { width: 0, height: 4 },
-    shadowOpacity: 0.12,
-    shadowRadius: 10,
-    elevation: 5,
-  },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginBottom: 4,
-  },
-  sectionTitleRow: {
+  permissionBtn: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
-  },
-  sectionTitle: {
-    fontSize: 18,
-    fontWeight: '700',
-    color: Colors.textPrimary,
-  },
-  seeAll: {
-    fontSize: 14,
-    color: Colors.primary,
-    fontWeight: '600',
-  },
-  emptyPets: {
-    alignItems: 'center',
-    paddingVertical: 24,
-    gap: 12,
-  },
-  emptyPetsDecor: {
-    backgroundColor: Colors.primaryBg,
-    padding: 16,
-    borderRadius: 50,
-    marginBottom: 4,
-  },
-  emptyPetsText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-  },
-  addPetButton: {
+    marginTop: 8,
     backgroundColor: Colors.primary,
     paddingHorizontal: 24,
-    paddingVertical: 12,
-    borderRadius: 24,
+    paddingVertical: 14,
+    borderRadius: 14,
+  },
+  permissionBtnText: {
+    fontSize: 15,
+    fontWeight: '700',
+    color: Colors.surface,
+  },
+  locationLoadingText: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    marginTop: 12,
+  },
+  // ── Location error banner ──
+  // ── Search bar ──
+  searchBar: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginHorizontal: 20,
+    marginTop: 12,
+    paddingHorizontal: 14,
+    paddingVertical: 11,
+    backgroundColor: Colors.surface,
+    borderRadius: 14,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+  },
+  searchBarText: {
+    flex: 1,
+    fontSize: 14,
+    color: Colors.textSecondary,
+  },
+  searchBarTextFilled: {
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
+  searchBarRight: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 6,
   },
-  addPetButtonText: {
-    color: Colors.textInverse,
-    fontWeight: '700',
-    fontSize: 14,
-  },
-  addPetCard: {
-    width: 120,
-    minHeight: 148,
+  filterBadge: {
+    minWidth: 18,
+    height: 18,
+    borderRadius: 9,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    backgroundColor: Colors.primaryBg,
-    borderRadius: 16,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-    borderStyle: 'dashed',
-    gap: 8,
+    paddingHorizontal: 4,
   },
-  addPetIcon: {
-    backgroundColor: Colors.surface,
-    padding: 12,
-    borderRadius: 50,
-    borderWidth: 2,
-    borderColor: Colors.primary,
-  },
-  addPetCardText: {
-    fontSize: 12,
-    color: Colors.primary,
+  filterBadgeText: {
+    fontSize: 10,
     fontWeight: '700',
+    color: Colors.surface,
   },
-  petRow: {
-    gap: 16,
-    paddingRight: 12,
-    paddingVertical: 8,
+  // ── Tabs + list ──
+  tabsContainer: {
+    marginTop: 10,
+    marginBottom: 12,
+    marginHorizontal: 20,
   },
-  quickActions: {
-    flexDirection: 'row',
-    gap: 14,
+  list: {
+    paddingTop: 0,
+    paddingHorizontal: 20,
+    paddingBottom: 100,
   },
-  quickAction: {
-    flex: 1,
+  alertGap: {
+    height: 12,
+  },
+  fab: {
+    position: 'absolute',
+    right: 20,
+    bottom: 20,
+    width: 56,
+    height: 56,
+    borderRadius: 28,
+    backgroundColor: Colors.error,
     alignItems: 'center',
     justifyContent: 'center',
-    minHeight: 110,
-    padding: 12,
-    borderRadius: 16,
-    borderWidth: 1.5,
-    gap: 10,
-    position: 'relative',
-    overflow: 'hidden',
+    shadowColor: Colors.error,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.4,
+    shadowRadius: 8,
+    elevation: 6,
   },
-  quickActionIconWrap: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  quickActionText: {
-    fontSize: 12,
-    fontWeight: '700',
-    textAlign: 'center',
-  },
-  pressedScale: {
-    transform: [{ scale: 0.97 }],
-  },
-  alertsList: {
-    gap: 12,
-  },
-  alertItem: {
-    marginBottom: 2,
-  },
-  noAlertsContainer: {
-    alignItems: 'center',
-    padding: 24,
-    backgroundColor: Colors.neutral50,
-    borderRadius: 12,
-  },
-  noAlertsText: {
-    fontSize: 16,
-    color: Colors.textSecondary,
-    fontWeight: '500',
-    marginTop: 8,
-  },
-  noAlertsSubtext: {
-    fontSize: 13,
-    color: Colors.textDisabled,
-    marginTop: 4,
+  fabPressed: {
+    transform: [{ scale: 0.96 }],
   },
 });

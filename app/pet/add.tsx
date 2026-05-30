@@ -189,12 +189,17 @@ export default function AddPetScreen() {
         ...(type === 'other' && otherType.trim() ? { species: otherType.trim() } : {}),
       };
 
+      console.log('[AddPet] submitting payload:', JSON.stringify(data, null, 2));
+
       if (isEdit && id) {
+        console.log('[AddPet] updating pet id:', id);
         await updatePet(id, data);
       } else {
+        console.log('[AddPet] creating new pet');
         await createPet(data);
       }
 
+      console.log('[AddPet] success');
       showToast({
         type: 'success',
         title: isEdit ? 'Pet updated' : 'Pet added',
@@ -204,6 +209,9 @@ export default function AddPetScreen() {
       });
       router.back();
     } catch (error) {
+      console.error('[AddPet] ERROR:', error);
+      console.error('[AddPet] error message:', (error as { message?: string })?.message);
+      console.error('[AddPet] error details:', JSON.stringify(error, Object.getOwnPropertyNames(error as object)));
       showToast({
         type: 'error',
         title: 'Failed to save pet',

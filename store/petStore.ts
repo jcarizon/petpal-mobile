@@ -35,6 +35,8 @@ interface PetState {
   createPet: (data: CreatePetRequest) => Promise<Pet>;
   updatePet: (id: string, data: UpdatePetRequest) => Promise<void>;
   deletePet: (id: string) => Promise<void>;
+  addPetPhoto: (petId: string, url: string) => Promise<void>;
+  deletePetPhoto: (petId: string, photoId: string) => Promise<void>;
   setSelectedPet: (pet: Pet | null) => void;
 
   // Health Records
@@ -46,6 +48,7 @@ interface PetState {
   // Reminders
   fetchReminders: (petId: string) => Promise<void>;
   createReminder: (petId: string, data: CreateReminderRequest) => Promise<void>;
+  updateReminder: (petId: string, reminderId: string, data: Partial<CreateReminderRequest>) => Promise<void>;
   completeReminder: (petId: string, reminderId: string) => Promise<void>;
   deleteReminder: (petId: string, reminderId: string) => Promise<void>;
 
@@ -97,12 +100,24 @@ export const usePetStore = create<PetState>((set, get) => ({
 
   createPet: async (data: CreatePetRequest): Promise<Pet> => {
     set({ isLoading: true, error: null });
+    // Map mobile PetType → backend PetSpecies enum (uppercase, fish/hamster → OTHER)
+    const SPECIES_MAP: Record<string, string> = {
+      dog: 'DOG', cat: 'CAT', bird: 'BIRD', rabbit: 'RABBIT',
+      other: 'OTHER', fish: 'OTHER', hamster: 'OTHER',
+    };
+    const { type, ...rest } = data as CreatePetRequest & { type: string };
+    const backendData = { ...rest, species: SPECIES_MAP[type] ?? 'OTHER' };
+    console.log('[petStore.createPet] POST /pets payload:', JSON.stringify(backendData));
     try {
-      const response = await api.post<Pet>('/pets', data);
+      const response = await api.post<Pet>('/pets', backendData);
+      console.log('[petStore.createPet] response status:', response.status);
+      console.log('[petStore.createPet] response data:', JSON.stringify(response.data).slice(0, 300));
       const newPet = unwrapApiData<Pet>(response.data);
       set((state) => ({ pets: [...state.pets, newPet], isLoading: false }));
       return newPet;
     } catch (err) {
+      console.error('[petStore.createPet] ERROR:', err);
+      console.error('[petStore.createPet] error details:', JSON.stringify(err, Object.getOwnPropertyNames(err as object)));
       const message = (err as { message: string }).message ?? 'Failed to create pet';
       set({ error: message, isLoading: false });
       throw err;
@@ -112,7 +127,15 @@ export const usePetStore = create<PetState>((set, get) => ({
   updatePet: async (id: string, data: UpdatePetRequest) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.put<Pet>(`/pets/${id}`, data);
+      const SPECIES_MAP: Record<string, string> = {
+        dog: 'DOG', cat: 'CAT', bird: 'BIRD', rabbit: 'RABBIT',
+        other: 'OTHER', fish: 'OTHER', hamster: 'OTHER',
+      };
+      const { type, ...rest } = data as UpdatePetRequest & { type?: string };
+      const backendData = type
+        ? { ...rest, species: SPECIES_MAP[type] ?? 'OTHER' }
+        : rest;
+      const response = await api.put<Pet>(`/pets/${id}`, backendData);
       const updated = unwrapApiData<Pet>(response.data);
       set((state) => ({
         pets: state.pets.map((p) => (p.id === id ? updated : p)),
@@ -138,6 +161,43 @@ export const usePetStore = create<PetState>((set, get) => ({
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to delete pet';
       set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  addPetPhoto: async (petId: string, url: string) => {
+    try {
+      const response = await api.post(`/pets/${petId}/photos`, { url });
+      const photo = unwrapApiData<{ id: string; url: string; createdAt: string }>(response.data);
+      set((state) => ({
+        pets: state.pets.map((p) =>
+          p.id === petId ? { ...p, photos: [...(p.photos ?? []), photo] } : p
+        ),
+        selectedPet: state.selectedPet?.id === petId
+          ? { ...state.selectedPet, photos: [...(state.selectedPet.photos ?? []), photo] }
+          : state.selectedPet,
+      }));
+    } catch (err) {
+      const message = (err as { message: string }).message ?? 'Failed to add photo';
+      set({ error: message });
+      throw err;
+    }
+  },
+
+  deletePetPhoto: async (petId: string, photoId: string) => {
+    try {
+      await api.delete(`/pets/${petId}/photos/${photoId}`);
+      set((state) => ({
+        pets: state.pets.map((p) =>
+          p.id === petId ? { ...p, photos: (p.photos ?? []).filter((ph) => ph.id !== photoId) } : p
+        ),
+        selectedPet: state.selectedPet?.id === petId
+          ? { ...state.selectedPet, photos: (state.selectedPet.photos ?? []).filter((ph) => ph.id !== photoId) }
+          : state.selectedPet,
+      }));
+    } catch (err) {
+      const message = (err as { message: string }).message ?? 'Failed to delete photo';
+      set({ error: message });
       throw err;
     }
   },
@@ -255,6 +315,25 @@ export const usePetStore = create<PetState>((set, get) => ({
       }));
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to create reminder';
+      set({ error: message, isLoading: false });
+      throw err;
+    }
+  },
+
+  updateReminder: async (petId: string, reminderId: string, data: Partial<CreateReminderRequest>) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await api.put(`/pets/${petId}/reminders/${reminderId}`, data);
+      const updated = unwrapApiData<Reminder>(response.data);
+      set((state) => ({
+        reminders: {
+          ...state.reminders,
+          [petId]: (state.reminders[petId] ?? []).map((r) => (r.id === reminderId ? updated : r)),
+        },
+        isLoading: false,
+      }));
+    } catch (err) {
+      const message = (err as { message: string }).message ?? 'Failed to update reminder';
       set({ error: message, isLoading: false });
       throw err;
     }

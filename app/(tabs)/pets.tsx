@@ -15,7 +15,7 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { PawPrint, Plus, ChevronRight, ChevronLeft, HeartPulse, Stethoscope, CalendarDays, Scale, LayoutGrid, List } from 'lucide-react-native';
+import { PawPrint, Plus, ChevronRight, ChevronLeft, HeartPulse, Stethoscope, CalendarDays, Scale, LayoutGrid, List, Bell } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { PageBanner, Badge } from '../../components/ui';
@@ -224,6 +224,12 @@ export default function PetsScreen() {
         iconNode={<PawPrint size={16} color={Colors.textInverse} />}
         rightNode={
           <View style={styles.headerActions}>
+            <TouchableOpacity
+              style={styles.headerBtn}
+              onPress={() => router.push('/notifications')}
+            >
+              <Bell size={18} color={Colors.textInverse} />
+            </TouchableOpacity>
             {pets.length > 1 && (
               <TouchableOpacity
                 style={styles.viewToggleButton}
@@ -455,6 +461,14 @@ const styles = StyleSheet.create({
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
+  },
+  headerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   viewToggleButton: {
     width: 36,

@@ -37,6 +37,8 @@ const QUICK_REMINDER_SUGGESTIONS: Record<HealthRecordType, { title: string; desc
   medication: { title: 'Medication Due', description: 'Administer medication.' },
   deworming: { title: 'Deworming Treatment', description: 'Schedule deworming.' },
   dental: { title: 'Dental Check', description: 'Regular dental care checkup.' },
+  weight: { title: 'Weight Check', description: 'Record current weight measurement.' },
+  surgery: { title: 'Surgery Appointment', description: 'Scheduled surgical procedure.' },
   other: { title: '', description: '' },
 };
 
@@ -50,7 +52,7 @@ export default function AddReminderScreen() {
     if (!reminderId || !id) return false;
     const petReminders = reminders[id];
     return !petReminders || !petReminders.some(r => r.id === reminderId);
-  }, [reminderId, id, reminders[id]]);
+  }, [reminderId, id, id ? reminders[id] : undefined]);
 
   useEffect(() => {
     if (needsFetch && id) {

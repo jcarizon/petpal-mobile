@@ -16,7 +16,7 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, AlertTriangle, ArrowLeft, ArrowRight, Check, Edit3, FileText, PawPrint, CalendarDays, Scale, Lightbulb, X, Activity, Stethoscope, Syringe, BookMarked, Bell, List } from 'lucide-react-native';
+import { Plus, AlertTriangle, ArrowLeft, ArrowRight, Check, Edit3, FileText, PawPrint, CalendarDays, Scale, Lightbulb, X, Activity, Stethoscope, Syringe, BookMarked, Bell, List, ImageIcon } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { HealthScore } from '../../components/pet/HealthScore';
 import { Loading } from '../../components/ui/Loading';
@@ -24,6 +24,9 @@ import { usePetStore } from '../../store/petStore';
 import { calculateAge, formatDate, formatHealthRecordType, formatPetType } from '../../lib/utils';
 import { HealthRecordType, PetType, UpdatePetRequest } from '../../types';
 import { Input, DateTimeField, Badge } from '../../components/ui';
+import { ImageUploader } from '../../components/ui/ImageUploader';
+import * as ImagePicker from 'expo-image-picker';
+import { uploadImage } from '../../lib/uploadImage';
 
 const { height, width } = Dimensions.get('window');
 const HERO_BASE_HEIGHT = Math.max(height * 0.5, 400);
@@ -36,6 +39,7 @@ type EditFormFields = {
   behaviour: string;
   birthDate: string;
   weight: string;
+  avatarUrl: string;
 };
 
 const PET_TYPES: Array<{ key: PetType; label: string; emoji: string }> = [
@@ -83,6 +87,7 @@ export default function PetDetailScreen() {
     deleteReminder,
     deletePet,
     updatePet,
+    addPetPhoto,
     isLoading,
   } = usePetStore();
   const [refreshing, setRefreshing] = React.useState(false);
@@ -103,7 +108,9 @@ export default function PetDetailScreen() {
     behaviour: '',
     birthDate: '',
     weight: '',
+    avatarUrl: '',
   });
+  const [isPhotoUploading, setIsPhotoUploading] = useState(false);
   const [formErrors, setFormErrors] = useState<{ name?: string }>({});
   const [currentEditStep, setCurrentEditStep] = useState(0);
   const [editLaunchMode, setEditLaunchMode] = useState<'multi' | 'field'>('multi');
@@ -114,6 +121,10 @@ export default function PetDetailScreen() {
     setCurrentEditStep(stepIndex);
     setEditLaunchMode(mode);
     setFormErrors((prev) => ({ ...prev, name: undefined }));
+    // Pre-fill avatarUrl from current pet data
+    if (pet) {
+      setEditForm((prev) => ({ ...prev, avatarUrl: pet.photoUrl ?? pet.avatarUrl ?? '' }));
+    }
     setShowEditPetModal(true);
   };
 
@@ -256,16 +267,13 @@ export default function PetDetailScreen() {
 
   const gallerySource = useMemo(() => {
     const set = new Set<string>();
-    if (pet?.photoUrl) {
-      set.add(pet.photoUrl);
-    }
+    if (pet?.photoUrl) set.add(pet.photoUrl);
+    for (const photo of (pet?.photos ?? [])) set.add(photo.url);
     for (const record of records) {
-      if (record.photoUrl) {
-        set.add(record.photoUrl);
-      }
+      if (record.photoUrl) set.add(record.photoUrl);
     }
     return Array.from(set);
-  }, [pet?.photoUrl, records]);
+  }, [pet?.photoUrl, pet?.photos, records]);
   const galleryItems = gallerySource.length > 0 ? gallerySource : ['placeholder'];
   const recordNotes = records.slice(0, 3).map((record) => ({
     id: record.id,
@@ -308,6 +316,29 @@ export default function PetDetailScreen() {
     return Object.keys(errors).length === 0;
   };
 
+  const handleAddPicture = async () => {
+    setShowAddOptionsModal(false);
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission Required', 'Allow PetPal to access your photo library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      quality: 0.85,
+      allowsEditing: false,
+    });
+    if (!result.canceled && result.assets[0] && id) {
+      try {
+        const url = await uploadImage(result.assets[0].uri, { folder: 'pets' });
+        await addPetPhoto(id, url);
+        await fetchPet(id);
+      } catch {
+        Alert.alert('Upload failed', 'Could not upload the photo. Please try again.');
+      }
+    }
+  };
+
   const handleCloseEditModal = () => {
     setShowEditPetModal(false);
     setEditLaunchMode('multi');
@@ -339,6 +370,7 @@ export default function PetDetailScreen() {
       birthDate: editForm.birthDate || undefined,
       type: editForm.type || undefined,
       weight: editForm.weight ? Number(editForm.weight) : undefined,
+      avatarUrl: editForm.avatarUrl || undefined,
     };
     setIsUpdatingPet(true);
     try {
@@ -403,6 +435,13 @@ export default function PetDetailScreen() {
               <ArrowLeft size={20} color={Colors.textInverse} />
             </TouchableOpacity>
             <View style={styles.headerActions}>
+              <TouchableOpacity
+                style={styles.headerAction}
+                onPress={() => router.push(`/alert/create?petId=${id}`)}
+                accessibilityLabel="Create alert for this pet"
+              >
+                <Bell size={16} color={Colors.primary} />
+              </TouchableOpacity>
               <TouchableOpacity
                 style={styles.headerAction}
                 onPress={() => setShowAddOptionsModal(true)}
@@ -636,7 +675,7 @@ export default function PetDetailScreen() {
                   <Text style={styles.addOptionLabel}>Diary</Text>
                   <Text style={styles.addOptionSubtitle}>Log moments, notes</Text>
                 </TouchableOpacity>
-                <TouchableOpacity 
+                <TouchableOpacity
                   style={styles.addOptionCard}
                   onPress={() => {
                     setShowAddOptionsModal(false);
@@ -648,6 +687,19 @@ export default function PetDetailScreen() {
                   </View>
                   <Text style={styles.addOptionLabel}>Reminder</Text>
                   <Text style={styles.addOptionSubtitle}>Set alerts, schedules</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={styles.addOptionCard}
+                  onPress={() => {
+                    setShowAddOptionsModal(false);
+                    router.push(`/pet/${id}/photos`);
+                  }}
+                >
+                  <View style={[styles.addOptionIcon, { backgroundColor: '#F0FDF4' }]}>
+                    <ImageIcon size={24} color="#16A34A" />
+                  </View>
+                  <Text style={styles.addOptionLabel}>Pictures</Text>
+                  <Text style={styles.addOptionSubtitle}>Manage photo gallery</Text>
                 </TouchableOpacity>
               </View>
             </View>
@@ -678,6 +730,23 @@ export default function PetDetailScreen() {
                 keyboardShouldPersistTaps="handled"
                 showsVerticalScrollIndicator={false}
               >
+                {/* Pet photo */}
+                <View style={styles.editPhotoRow}>
+                  <ImageUploader
+                    value={editForm.avatarUrl || pet.photoUrl || pet.avatarUrl}
+                    onChange={(url) => setEditForm((prev) => ({ ...prev, avatarUrl: url }))}
+                    folder="pets"
+                    shape="circle"
+                    width={72}
+                    height={72}
+                    onUploadStart={() => setIsPhotoUploading(true)}
+                    onUploadEnd={() => setIsPhotoUploading(false)}
+                  />
+                  <Text style={styles.editPhotoHint}>
+                    {isPhotoUploading ? 'Uploading…' : 'Tap to change photo'}
+                  </Text>
+                </View>
+
                 <View style={styles.editProgressContainer}>
                   <View style={styles.editProgressTrack}>
                     <View 
@@ -1731,6 +1800,16 @@ const styles = StyleSheet.create({
   editModalContent: {
     gap: 12,
     paddingBottom: 12,
+  },
+  editPhotoRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 14,
+    paddingBottom: 8,
+  },
+  editPhotoHint: {
+    fontSize: 13,
+    color: Colors.textSecondary,
   },
   editModalActions: {
     flexDirection: 'row',

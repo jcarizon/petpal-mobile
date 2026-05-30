@@ -15,6 +15,8 @@ import { Colors } from '../../../../constants/colors';
 import { Input } from '../../../../components/ui/Input';
 import { Button } from '../../../../components/ui/Button';
 import { DateTimeField, ScreenHeader, useToast } from '../../../../components/ui';
+import { ImageUploader } from '../../../../components/ui/ImageUploader';
+import { resolveImageUrl } from '../../../../lib/uploadImage';
 import { usePetStore } from '../../../../store/petStore';
 import { HealthRecordType, CreateHealthRecordRequest, CreateReminderRequest } from '../../../../types';
 
@@ -62,6 +64,8 @@ export default function AddHealthRecordScreen() {
   const [notes, setNotes] = useState('');
   const [nextDueDate, setNextDueDate] = useState<Date | null>(null);
   const [createReminderEnabled, setCreateReminderEnabled] = useState(true);
+  const [attachmentUri,    setAttachmentUri]    = useState('');
+  const [isAttachUploading, setIsAttachUploading] = useState(false);
   const [errors, setErrors] = useState<{ title?: string; date?: string; nextDueDate?: string }>({});
   const [showQuickFill, setShowQuickFill] = useState(false);
 
@@ -106,6 +110,9 @@ export default function AddHealthRecordScreen() {
     if (!validate() || !id) return;
 
     try {
+      const attachmentUrl = attachmentUri
+        ? await resolveImageUrl(attachmentUri, { folder: 'sightings' })
+        : undefined;
       const data: CreateHealthRecordRequest = {
         type,
         title: title.trim(),
@@ -113,6 +120,7 @@ export default function AddHealthRecordScreen() {
         vetName: vetName.trim() || undefined,
         notes: notes.trim() || undefined,
         nextDueDate: nextDueDate ? nextDueDate.toISOString() : undefined,
+        attachmentUrl,
       };
 
       await createHealthRecord(id, data);
@@ -280,6 +288,23 @@ export default function AddHealthRecordScreen() {
           style={{ minHeight: 80, textAlignVertical: 'top' }}
           leftIcon={<FileText size={16} color={Colors.textSecondary} />}
         />
+
+        <View>
+          <Text style={styles.attachLabel}>Attachment (optional)</Text>
+          <ImageUploader
+            value={attachmentUri}
+            onChange={setAttachmentUri}
+            folder="sightings"
+            shape="rect"
+            width="100%"
+            height={130}
+            onUploadStart={() => setIsAttachUploading(true)}
+            onUploadEnd={() => setIsAttachUploading(false)}
+          />
+          {isAttachUploading && (
+            <Text style={styles.attachHint}>Uploading attachment…</Text>
+          )}
+        </View>
 
         <DateTimeField
           label="Next Due Date (optional)"
@@ -475,6 +500,17 @@ const styles = StyleSheet.create({
   },
   submitButton: {
     marginTop: 8,
+  },
+  attachLabel: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+    marginBottom: 8,
+  },
+  attachHint: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    marginTop: 4,
   },
   reminderToggle: {
     flexDirection: 'row',

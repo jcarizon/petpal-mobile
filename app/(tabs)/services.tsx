@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Modal,
   Linking,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   Platform,
   TextInput,
@@ -18,7 +19,7 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { LayoutGrid, LocateFixed, Map, MapPin, MapPinOff, RotateCcw, Search, SlidersHorizontal } from 'lucide-react-native';
+import { Bell, LayoutGrid, LocateFixed, Map, MapPin, MapPinOff, RotateCcw, Search, SlidersHorizontal } from 'lucide-react-native';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Colors } from '../../constants/colors';
 import { ServiceCard } from '../../components/services/ServiceCard';
@@ -276,6 +277,14 @@ export default function ServicesScreen() {
         helper="Filters adjust your radius and categories. Switch between cards and map."
         iconNode={<MapPin size={18} color={Colors.textInverse} />}
         style={[styles.serviceBanner, { marginTop: 0 }]}
+        rightNode={
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => router.push('/notifications')}
+          >
+            <Bell size={18} color={Colors.textInverse} />
+          </TouchableOpacity>
+        }
       />
       <View style={styles.screenBody}>
     <View style={styles.filterToolbar}>
@@ -670,6 +679,14 @@ const styles = StyleSheet.create({
   serviceBanner: {
     marginTop: 0,
     marginBottom: 8,
+  },
+  headerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   section: {
     marginTop: 32,

@@ -11,7 +11,7 @@
 
 import api from './api';
 
-export type UploadFolder = 'pets' | 'alerts' | 'diaries' | 'sightings';
+export type UploadFolder = 'pets' | 'alerts' | 'diaries' | 'sightings' | 'chat';
 
 export interface UploadResult {
   url: string;
@@ -75,6 +75,11 @@ export async function uploadImage(
     gif: 'image/gif',
     heic: 'image/heic',
     heif: 'image/heif',
+    mp4: 'video/mp4',
+    mov: 'video/quicktime',
+    avi: 'video/x-msvideo',
+    webm: 'video/webm',
+    '3gp': 'video/3gpp',
   };
   const mimeType = mimeMap[ext] ?? 'image/jpeg';
 

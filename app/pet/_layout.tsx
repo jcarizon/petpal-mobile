@@ -8,6 +8,7 @@ export default function PetLayout() {
       <Stack.Screen name="[id]/record" />
       <Stack.Screen name="[id]/diary" />
       <Stack.Screen name="[id]/reminder" />
+      <Stack.Screen name="[id]/photos" />
     </Stack>
   );
 }

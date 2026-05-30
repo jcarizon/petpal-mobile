@@ -1,173 +1,394 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity, Animated } from 'react-native';
-import { Button } from '../ui/Button';
-import { ShareButton } from '../ui/ShareButton';
+import React, { useState, useRef } from 'react';
+import {
+  View,
+  Text,
+  Image,
+  StyleSheet,
+  TouchableOpacity,
+  FlatList,
+  Share,
+  Dimensions,
+  NativeSyntheticEvent,
+  NativeScrollEvent,
+} from 'react-native';
+import { Eye, MessageCircle, Send, MapPin } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
-import { Alert } from '../../types';
+import { Alert, AlertType } from '../../types';
 import { formatRelativeDate, calculateDistance, formatDistance } from '../../lib/utils';
-import { Badge } from '../ui/Badge';
 
+// ── Layout constants ──────────────────────────────────────────────────────────
+const CARD_WIDTH = Dimensions.get('window').width - 40; // 20px list padding each side
+const IMAGE_HEIGHT = Math.round(CARD_WIDTH * 1.05);     // slightly taller than square
+
+// ── Type config (exported for reuse elsewhere) ────────────────────────────────
+export const TYPE_CONFIG: Record<AlertType, {
+  color: string;
+  bgColor: string;
+  label: string;
+  emoji: string;
+  ctaLabel: (petName?: string) => string;
+}> = {
+  lost:     { color: '#EF4444', bgColor: '#FEF2F2', label: 'LOST',     emoji: '🚨', ctaLabel: (n) => `I Saw ${n || 'This Pet'}!`         },
+  found:    { color: '#10B981', bgColor: '#ECFDF5', label: 'FOUND',    emoji: '🐾', ctaLabel: () => 'This Is My Pet!'                      },
+  adoption: { color: '#8B5CF6', bgColor: '#F5F3FF', label: 'ADOPTION', emoji: '🏠', ctaLabel: (n) => `Adopt ${n || 'This Pet'}`           },
+  playmate: { color: '#F59E0B', bgColor: '#FFFBEB', label: 'PLAYMATE', emoji: '🐶', ctaLabel: (n) => `Meet ${n || 'This Pet'}`            },
+};
+
+// ── Props ─────────────────────────────────────────────────────────────────────
 interface AlertCardProps {
   alert: Alert;
   userLatitude?: number;
   userLongitude?: number;
   onPress: () => void;
+  onSightingsPress?: () => void;
+  onFormPress?: () => void;
 }
 
-export function AlertCard({ alert, userLatitude, userLongitude, onPress }: AlertCardProps) {
-  const distance =
-    userLatitude !== undefined && userLongitude !== undefined
-      ? calculateDistance(userLatitude, userLongitude, alert.latitude, alert.longitude)
-      : null;
+// ── Component ─────────────────────────────────────────────────────────────────
+export function AlertCard({ alert, userLatitude, userLongitude, onPress, onSightingsPress, onFormPress }: AlertCardProps) {
+  const [expanded, setExpanded]     = useState(false);
+  const [activeSlide, setActiveSlide] = useState(0);
 
-  const isLost = alert.type === 'lost';
-  const lastSeen = alert.description || `Last seen near ${alert.city}${alert.petName ? ", " + alert.petName : ''}.`;
-  const petDetails = `Male, 3 years old, wearing blue collar.`;
-  const notificationText = `${alert.sightingCount} people within 2km have been notified`;
+  const config   = TYPE_CONFIG[alert.type] ?? TYPE_CONFIG.lost;
+  const isLostFound = alert.type === 'lost' || alert.type === 'found';
+  const count    = isLostFound ? alert.sightingCount : (alert.interestCount ?? 0);
+  const distance = userLatitude != null && userLongitude != null
+    ? calculateDistance(userLatitude, userLongitude, alert.latitude, alert.longitude)
+    : null;
 
-  const [scale] = React.useState(new Animated.Value(1));
-  const handlePressIn = () => {
-    Animated.spring(scale, {
-      toValue: 0.97,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 8,
-    }).start();
+  // Use the photos array if present, otherwise fall back to single photoUrl
+  const photos: string[] = (alert.photos && alert.photos.length > 0)
+    ? alert.photos
+    : alert.photoUrl ? [alert.photoUrl] : [];
+
+  const description = alert.description?.trim() ||
+    (alert.petName ? `${alert.petName} is ${alert.type === 'found' ? 'found' : 'missing'}. Please help!` : `See alert details for more information.`);
+
+  const displayName = alert.userName || 'PetPal User';
+  const subtitle    = [alert.petName, alert.petBreed].filter(Boolean).join(' · ') ||
+                      (alert.petSpecies ? alert.petSpecies.charAt(0) + alert.petSpecies.slice(1).toLowerCase() : null) ||
+                      alert.city;
+
+  const handleShare = async () => {
+    try {
+      await Share.share({
+        message: `${config.emoji} ${config.label}: ${alert.title}\n${description}\n\nShared via PetPal`,
+      });
+    } catch {}
   };
-  const handlePressOut = () => {
-    Animated.spring(scale, {
-      toValue: 1,
-      useNativeDriver: true,
-      speed: 40,
-      bounciness: 8,
-    }).start();
+
+  const handleScroll = (e: NativeSyntheticEvent<NativeScrollEvent>) => {
+    const index = Math.round(e.nativeEvent.contentOffset.x / CARD_WIDTH);
+    setActiveSlide(index);
   };
 
   return (
-    <Animated.View style={{ transform: [{ scale }] }}>
-      <TouchableOpacity
-        style={styles.card}
-        activeOpacity={0.85}
-        onPress={onPress}
-        onPressIn={handlePressIn}
-        onPressOut={handlePressOut}
-        accessibilityRole="button"
-      >
-        {/* Top row: avatar, LOST badge, time */}
-        <View style={styles.topRow}>
-          <View style={styles.imageContainer}>
-            {alert.photoUrl ? (
-              <Image source={{ uri: alert.photoUrl }} style={styles.image} />
-            ) : (
-              <View style={styles.imagePlaceholder}>
-                <Text style={styles.imagePlaceholderText}>🐾</Text>
-              </View>
-            )}
-          </View>
-          <View style={styles.topInfo}>
-            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
-              <Badge
-                label={isLost ? 'LOST' : 'FOUND'}
-                style={styles.typeBadge}
-                backgroundColor={isLost ? Colors.alertLost : Colors.alertFound}
-                color={Colors.textInverse}
-                size="sm"
-              />
-              <Text style={styles.timeTop}>{formatRelativeDate(new Date(alert.createdAt))}</Text>
-            </View>
-            <Text style={styles.title} numberOfLines={1}>
-              {alert.petName ? `${alert.petName} - ${alert.petBreed || ''}`.trim() : alert.title}
-            </Text>
-          </View>
+    <View style={styles.card}>
+
+      {/* ── Header ──────────────────────────────────────────────── */}
+      <TouchableOpacity style={styles.header} onPress={onPress} activeOpacity={0.8}>
+        <View style={[styles.avatar, { backgroundColor: config.bgColor }]}>
+          <Text style={styles.avatarEmoji}>{config.emoji}</Text>
         </View>
 
-        {/* Description */}
-        <Text style={styles.description} numberOfLines={2}>{lastSeen} {petDetails}</Text>
-
-        {/* Action buttons */}
-        <View style={styles.actionsRow}>
-          <Button title={isLost ? `I Saw ${alert.petName || 'this pet'}!` : 'This is my pet!'} variant="primary" size="md" style={styles.actionButton} onPress={onPress} />
-          <ShareButton message={`Help find ${alert.petName || alert.title}! ${lastSeen}`} style={styles.actionButton} />
+        <View style={styles.headerMid}>
+          <Text style={styles.username} numberOfLines={1}>{displayName}</Text>
+          {subtitle ? (
+            <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
+          ) : null}
         </View>
 
-        {/* Notification text */}
-        <Text style={styles.notificationText}>{notificationText}</Text>
+        <View style={styles.headerRight}>
+          <View style={[styles.typePill, { backgroundColor: config.color }]}>
+            <Text style={styles.typePillText}>{config.label}</Text>
+          </View>
+          <Text style={styles.time}>{formatRelativeDate(new Date(alert.createdAt))}</Text>
+        </View>
       </TouchableOpacity>
-    </Animated.View>
+
+      {/* ── Image / Carousel ────────────────────────────────────── */}
+      {photos.length > 0 ? (
+        <>
+          <FlatList
+            data={photos}
+            horizontal
+            pagingEnabled
+            showsHorizontalScrollIndicator={false}
+            keyExtractor={(_, i) => String(i)}
+            onScroll={handleScroll}
+            scrollEventThrottle={16}
+            renderItem={({ item }) => (
+              <TouchableOpacity activeOpacity={0.95} onPress={onPress}>
+                <Image
+                  source={{ uri: item }}
+                  style={styles.image}
+                  resizeMode="cover"
+                />
+              </TouchableOpacity>
+            )}
+          />
+          {photos.length > 1 && (
+            <View style={styles.dots}>
+              {photos.map((_, i) => (
+                <View
+                  key={i}
+                  style={[styles.dot, i === activeSlide && styles.dotActive]}
+                />
+              ))}
+            </View>
+          )}
+        </>
+      ) : (
+        <TouchableOpacity
+          style={[styles.imagePlaceholder, { backgroundColor: config.bgColor }]}
+          activeOpacity={0.9}
+          onPress={onPress}
+        >
+          <Text style={styles.placeholderEmoji}>{config.emoji}</Text>
+          <Text style={[styles.placeholderLabel, { color: config.color }]}>
+            {config.label} ALERT
+          </Text>
+          <Text style={styles.placeholderSub}>No photo available</Text>
+        </TouchableOpacity>
+      )}
+
+      {/* ── Adoption fee chip (above actions) ───────────────────── */}
+      {alert.type === 'adoption' && alert.adoptionFee !== undefined && (
+        <View style={[styles.feePill, { backgroundColor: config.bgColor }]}>
+          <Text style={[styles.feePillText, { color: config.color }]}>
+            {alert.adoptionFee === 0 ? '🆓 Free to good home' : `₱${alert.adoptionFee} adoption fee`}
+          </Text>
+        </View>
+      )}
+
+      {/* ── Actions row ─────────────────────────────────────────── */}
+      <View style={styles.actions}>
+        <View style={styles.actionsLeft}>
+          {/* Eye — sightings / interests */}
+          <TouchableOpacity style={styles.actionBtn} onPress={onSightingsPress ?? onPress}>
+            <Eye size={24} color={Colors.textPrimary} strokeWidth={1.8} />
+            {count > 0 && <Text style={styles.actionCount}>{count}</Text>}
+          </TouchableOpacity>
+
+          {/* Comment — opens form modal */}
+          <TouchableOpacity style={styles.actionBtn} onPress={onFormPress ?? onPress}>
+            <MessageCircle size={24} color={Colors.textPrimary} strokeWidth={1.8} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Share */}
+        <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
+          <Send size={22} color={Colors.textPrimary} strokeWidth={1.8} />
+        </TouchableOpacity>
+      </View>
+
+      {/* ── Description ─────────────────────────────────────────── */}
+      <View style={styles.descWrap}>
+        <Text style={styles.descText} numberOfLines={expanded ? undefined : 1}>
+          <Text style={styles.descUsername}>{displayName} </Text>
+          {description}
+        </Text>
+        {!expanded && description.length > 60 && (
+          <TouchableOpacity onPress={() => setExpanded(true)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+            <Text style={styles.moreText}>more</Text>
+          </TouchableOpacity>
+        )}
+      </View>
+
+      {/* ── Distance + location ─────────────────────────────────── */}
+      {(distance !== null || alert.city) && (
+        <View style={styles.locationRow}>
+          <MapPin size={11} color={Colors.neutral400} />
+          <Text style={styles.locationText}>
+            {distance !== null ? `${formatDistance(distance)} away · ` : ''}{alert.city}
+          </Text>
+        </View>
+      )}
+    </View>
   );
 }
 
+// ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 14,
-    padding: 16,
-    marginBottom: 14,
-    borderWidth: 1,
-    borderColor: Colors.border,
+    borderRadius: 16,
+    overflow: 'hidden',
+    shadowColor: '#000',
+    shadowOffset: { width: 0, height: 2 },
+    shadowOpacity: 0.07,
+    shadowRadius: 8,
+    elevation: 3,
   },
-  topRow: {
+
+  // Header
+  header: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 8,
+    paddingHorizontal: 14,
+    paddingVertical: 12,
+    gap: 10,
   },
-  imageContainer: {
-    marginRight: 12,
-  },
-  image: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: Colors.neutral100,
-  },
-  imagePlaceholder: {
-    width: 54,
-    height: 54,
-    borderRadius: 27,
-    backgroundColor: Colors.neutral100,
+  avatar: {
+    width: 40,
+    height: 40,
+    borderRadius: 20,
     alignItems: 'center',
     justifyContent: 'center',
+    flexShrink: 0,
   },
-  imagePlaceholderText: {
-    fontSize: 28,
+  avatarEmoji: {
+    fontSize: 20,
   },
-  topInfo: {
+  headerMid: {
     flex: 1,
-    justifyContent: 'center',
   },
-  typeBadge: {
-    marginRight: 8,
-  },
-  timeTop: {
-    fontSize: 12,
-    color: Colors.textSecondary,
-    fontWeight: '400',
-  },
-  title: {
-    fontSize: 16,
+  username: {
+    fontSize: 13,
     fontWeight: '700',
     color: Colors.textPrimary,
-    marginTop: 2,
+    lineHeight: 17,
   },
-  description: {
-    fontSize: 14,
+  subtitle: {
+    fontSize: 12,
     color: Colors.textSecondary,
-    marginBottom: 12,
+    lineHeight: 16,
   },
-  actionsRow: {
+  headerRight: {
+    alignItems: 'flex-end',
+    gap: 4,
+    flexShrink: 0,
+  },
+  typePill: {
+    paddingHorizontal: 8,
+    paddingVertical: 3,
+    borderRadius: 6,
+  },
+  typePillText: {
+    fontSize: 10,
+    fontWeight: '800',
+    color: '#fff',
+    letterSpacing: 0.5,
+  },
+  time: {
+    fontSize: 11,
+    color: Colors.neutral400,
+  },
+
+  // Image
+  image: {
+    width: CARD_WIDTH,
+    height: IMAGE_HEIGHT,
+  },
+  imagePlaceholder: {
+    width: CARD_WIDTH,
+    height: IMAGE_HEIGHT * 0.6,
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+  },
+  placeholderEmoji: {
+    fontSize: 52,
+  },
+  placeholderLabel: {
+    fontSize: 15,
+    fontWeight: '800',
+    letterSpacing: 1,
+  },
+  placeholderSub: {
+    fontSize: 12,
+    color: Colors.neutral400,
+  },
+
+  // Dots
+  dots: {
+    flexDirection: 'row',
+    justifyContent: 'center',
+    gap: 5,
+    paddingVertical: 8,
+  },
+  dot: {
+    width: 6,
+    height: 6,
+    borderRadius: 3,
+    backgroundColor: Colors.neutral300,
+  },
+  dotActive: {
+    backgroundColor: Colors.textPrimary,
+    width: 18,
+  },
+
+  // Fee chip
+  feePill: {
+    alignSelf: 'flex-start',
+    marginHorizontal: 14,
+    marginTop: 10,
+    paddingHorizontal: 10,
+    paddingVertical: 4,
+    borderRadius: 8,
+  },
+  feePillText: {
+    fontSize: 12,
+    fontWeight: '600',
+  },
+
+  // Actions
+  actions: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    paddingHorizontal: 12,
+    paddingTop: 10,
+    paddingBottom: 4,
+  },
+  actionsLeft: {
     flexDirection: 'row',
     alignItems: 'center',
-    marginBottom: 10,
+    gap: 4,
   },
-  actionButton: {
-    flex: 1,
-    marginRight: 8,
-    minWidth: 0,
+  actionBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+    padding: 6,
   },
-  notificationText: {
+  actionCount: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textPrimary,
+  },
+
+  // Description
+  descWrap: {
+    paddingHorizontal: 14,
+    paddingBottom: 2,
+    gap: 2,
+  },
+  descText: {
     fontSize: 13,
-    color: Colors.textSecondary,
-    marginTop: 2,
-    marginLeft: 2,
+    color: Colors.textPrimary,
+    lineHeight: 19,
+  },
+  descUsername: {
+    fontWeight: '700',
+  },
+  moreText: {
+    fontSize: 13,
+    color: Colors.neutral400,
+    fontWeight: '500',
+  },
+
+  // Location
+  locationRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 14,
+    paddingBottom: 12,
+    paddingTop: 6,
+  },
+  locationText: {
+    fontSize: 11,
+    color: Colors.neutral400,
   },
 });
