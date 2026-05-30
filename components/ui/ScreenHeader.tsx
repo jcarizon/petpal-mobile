@@ -1,6 +1,7 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity } from 'react-native';
 import { useRouter } from 'expo-router';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { ArrowLeft } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 
@@ -12,9 +13,9 @@ interface ScreenHeaderProps {
 
 export function ScreenHeader({ title, subtitle, rightAction }: ScreenHeaderProps) {
   const router = useRouter();
-
+  const insets = useSafeAreaInsets();
   return (
-    <View style={styles.container}>
+    <View style={[styles.container, { paddingTop: 8 + insets.top }]}> 
       <View style={styles.topRow}>
         <TouchableOpacity style={styles.backButton} onPress={() => router.back()}>
           <ArrowLeft size={18} color={Colors.textPrimary} />
@@ -31,7 +32,6 @@ export function ScreenHeader({ title, subtitle, rightAction }: ScreenHeaderProps
 const styles = StyleSheet.create({
   container: {
     paddingHorizontal: 20,
-    paddingTop: 8,
     paddingBottom: 12,
     gap: 10,
     backgroundColor: Colors.background,

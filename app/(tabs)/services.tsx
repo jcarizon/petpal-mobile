@@ -8,6 +8,7 @@ import {
   RefreshControl,
   Modal,
   Linking,
+  TouchableOpacity,
   TouchableWithoutFeedback,
   Platform,
   TextInput,
@@ -18,12 +19,13 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { LayoutGrid, LocateFixed, Map, MapPin, MapPinOff, RotateCcw, Search, SlidersHorizontal } from 'lucide-react-native';
+import { Bell, LayoutGrid, LocateFixed, Map, MapPin, MapPinOff, RotateCcw, Search, SlidersHorizontal } from 'lucide-react-native';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Colors } from '../../constants/colors';
 import { ServiceCard } from '../../components/services/ServiceCard';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Loading } from '../../components/ui/Loading';
+import { PageBanner } from '../../components/ui';
 import { useServices } from '../../hooks/useServices';
 import { useLocation } from '../../hooks/useLocation';
 import { ServiceType } from '../../types';
@@ -267,20 +269,25 @@ export default function ServicesScreen() {
   }
 
   return (
-    <View style={styles.container}>
-      <StatusBar style="light" />
-      {/* Header */}
-      <LinearGradient
-        colors={[Colors.primaryLight, Colors.primary]}
-        start={{ x: 0, y: 0 }}
-        end={{ x: 1, y: 1 }}
-        style={[styles.header, { paddingTop: insets.top + 12 }]}
-      >
-        <Text style={styles.title}>Services</Text>
-        <Text style={styles.subtitle}>Discover trusted pet services near your current location.</Text>
-      </LinearGradient>
-
-      <View style={styles.filterToolbar}>
+    <SafeAreaView style={styles.container} edges={['top']}>
+      <StatusBar style="dark" />
+      <PageBanner
+        title="Services"
+        subtitle="Discover trusted pet services near your current location."
+        helper="Filters adjust your radius and categories. Switch between cards and map."
+        iconNode={<MapPin size={18} color={Colors.textInverse} />}
+        style={[styles.serviceBanner, { marginTop: 0 }]}
+        rightNode={
+          <TouchableOpacity
+            style={styles.headerBtn}
+            onPress={() => router.push('/notifications')}
+          >
+            <Bell size={18} color={Colors.textInverse} />
+          </TouchableOpacity>
+        }
+      />
+      <View style={styles.screenBody}>
+    <View style={styles.filterToolbar}>
         <View style={styles.filterToolbarLeft}>
           <Pressable
             style={({ pressed }) => [styles.filterButton, pressed && styles.pressedScale]}
@@ -409,6 +416,7 @@ export default function ServicesScreen() {
           refreshControl={
             <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
           }
+          contentInsetAdjustmentBehavior="never"
           ListEmptyComponent={
             <EmptyState
               iconNode={<MapPinOff size={54} color={Colors.textSecondary} />}
@@ -656,6 +664,7 @@ export default function ServicesScreen() {
         </Pressable>
       </Modal>
     </View>
+  </SafeAreaView>
   );
 }
 
@@ -664,27 +673,44 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  header: {
-    paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 16,
+  screenBody: {
+    flex: 1,
   },
-  title: {
-    fontSize: 24,
+  serviceBanner: {
+    marginTop: 0,
+    marginBottom: 8,
+  },
+  headerBtn: {
+    width: 34,
+    height: 34,
+    borderRadius: 10,
+    backgroundColor: 'rgba(255,255,255,0.2)',
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  section: {
+    marginTop: 32,
+    marginHorizontal: 20,
+  },
+  sectionTitle: {
+    fontSize: 19,
     fontWeight: '800',
-    color: Colors.textInverse,
+    color: Colors.textPrimary,
+    marginLeft: 10,
+    letterSpacing: 0.1,
   },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 13,
-    color: 'rgba(255,255,255,0.85)',
+  seeAll: {
+    fontSize: 14,
+    color: Colors.primary,
+    fontWeight: '700',
+    letterSpacing: 0.1,
   },
   filterToolbar: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     paddingHorizontal: 20,
-    paddingTop: 14,
+    paddingTop: 8,
     paddingBottom: 10,
     gap: 10,
   },
@@ -839,6 +865,7 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
   list: {
+    paddingTop: 0,
     paddingHorizontal: 20,
     paddingBottom: 120,
   },

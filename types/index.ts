@@ -9,10 +9,9 @@ export interface User {
   phone?: string;
   city: string;
   avatarUrl?: string;
-  xp: number;
-  level: number;
+  totalXP: number;
   createdAt: string;
-  updatedAt: string;
+  role: string;
 }
 
 export interface AuthTokens {
@@ -53,6 +52,8 @@ export interface Pet {
   name: string;
   type: PetType;
   breed?: string;
+  description?: string;
+  behaviour?: string;
   birthDate?: string;
   weight?: number;
   photoUrl?: string;
@@ -60,12 +61,26 @@ export interface Pet {
   createdAt: string;
   updatedAt: string;
   species?: string;
+  activeLostFoundAlert?: {
+    id: string;
+    type: 'lost' | 'found';
+    status: 'active';
+  } | null;
+  photos?: PetPhoto[];
+}
+
+export interface PetPhoto {
+  id: string;
+  url: string;
+  createdAt: string;
 }
 
 export interface CreatePetRequest {
   name: string;
   type: PetType;
   breed?: string;
+  description?: string;
+  behaviour?: string;
   birthDate?: string;
   weight?: number;
   photoUrl?: string;
@@ -185,7 +200,7 @@ export interface CreateReviewRequest {
 
 // ─── Alerts ──────────────────────────────────────────────────────────────────
 
-export type AlertType = 'lost' | 'found';
+export type AlertType = 'lost' | 'found' | 'adoption' | 'playmate';
 export type AlertStatus = 'active' | 'resolved';
 
 export interface Alert {
@@ -205,10 +220,26 @@ export interface Alert {
   latitude: number;
   longitude: number;
   city: string;
+  photos?: string[];
   sightingCount: number;
+  interestCount?: number;
   createdAt: string;
   updatedAt: string;
   petSpecies?: string;
+
+  // Adoption fields
+  adoptionReason?: string;
+  adoptionFee?: number;
+  isNeutered?: boolean;
+  isVaccinated?: boolean;
+  idealOwnerNote?: string;
+
+  // Playmate fields
+  playmatePreferredArea?: string;
+  playmateSchedule?: string;
+  playmatePreferredSize?: 'small' | 'medium' | 'large' | 'any';
+  playmateEnergyLevel?: 'low' | 'medium' | 'high' | 'any';
+  playmateVaccineRequired?: boolean;
 }
 
 export interface CreateAlertRequest {
@@ -216,6 +247,7 @@ export interface CreateAlertRequest {
   title: string;
   description?: string;
   photoUrl?: string;
+  photos?: string[];
   petName?: string;
   petBreed?: string;
   latitude: number;
@@ -223,6 +255,20 @@ export interface CreateAlertRequest {
   city: string;
   contactPhone?: string;
   petId?: string | number;
+
+  // Adoption fields
+  adoptionReason?: string;
+  adoptionFee?: number;
+  isNeutered?: boolean;
+  isVaccinated?: boolean;
+  idealOwnerNote?: string;
+
+  // Playmate fields
+  playmatePreferredArea?: string;
+  playmateSchedule?: string;
+  playmatePreferredSize?: string;
+  playmateEnergyLevel?: string;
+  playmateVaccineRequired?: boolean;
 }
 
 export interface AlertFilters {
@@ -232,6 +278,28 @@ export interface AlertFilters {
   longitude?: number;
   radiusKm?: number;
   city?: string;
+  search?: string;
+  species?: string;
+  breed?: string;
+  dateRange?: 'any' | '24h' | '7d' | '30d';
+  sortBy?: 'newest' | 'nearest';
+}
+
+// ─── Alert Interests ─────────────────────────────────────────────────────────
+
+export interface AlertInterest {
+  id: string;
+  alertId: string;
+  userId: string;
+  userName: string;
+  userAvatarUrl?: string;
+  userPhone?: string;
+  message?: string;
+  createdAt: string;
+}
+
+export interface CreateInterestRequest {
+  message?: string;
 }
 
 // ─── Sightings ───────────────────────────────────────────────────────────────
@@ -241,6 +309,7 @@ export interface Sighting {
   alertId: string;
   userId: string;
   userName: string;
+  userPhone?: string;
   description: string;
   latitude: number;
   longitude: number;
@@ -278,13 +347,48 @@ export interface Badge {
 
 export interface LeaderboardEntry {
   rank: number;
-  userId: string;
+  id: string;
   name: string;
   avatarUrl?: string;
   city: string;
-  xp: number;
-  level: number;
+  totalXP: number;
+  userId?: string;
   badgeCount: number;
+}
+
+// ─── Events ──────────────────────────────────────────────────────────────────
+
+export interface PetEvent {
+  id: string;
+  title: string;
+  description?: string;
+  location: string;
+  latitude?: number;
+  longitude?: number;
+  startDate: string;
+  endDate?: string;
+  imageUrl?: string;
+  maxRsvps?: number;
+  rsvpCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+// ─── Notifications ───────────────────────────────────────────────────────────
+
+export type NotificationChannel = 'PUSH' | 'SMS' | 'EMAIL';
+export type NotificationStatus = 'PENDING' | 'SENT' | 'FAILED';
+
+export interface NotificationLog {
+  id: string;
+  userId: string;
+  channel: NotificationChannel;
+  type?: PushNotificationData['type'];
+  title: string;
+  body: string;
+  status: NotificationStatus;
+  sentAt?: string;
+  createdAt: string;
 }
 
 // ─── API Response ────────────────────────────────────────────────────────────
@@ -326,10 +430,41 @@ export interface LocationState {
 // ─── Notifications ───────────────────────────────────────────────────────────
 
 export interface PushNotificationData {
-  type: 'reminder' | 'alert' | 'sighting' | 'badge';
+  type: 'reminder' | 'alert' | 'sighting' | 'badge' | 'interest' | 'level_up' | 'review' | 'welcome' | 'role_change' | 'service_verified' | 'chat_request' | 'chat_message' | 'chat_accepted';
   id?: string;
+  conversationId?: string;
   title: string;
   body: string;
+}
+
+// ─── Chat ─────────────────────────────────────────────────────────────────────
+
+export type ChatStatus = 'PENDING' | 'ACTIVE' | 'DECLINED';
+
+export interface ChatConversation {
+  id: string;
+  alertId: string;
+  alertTitle: string;
+  initiatorId: string;
+  initiatorName: string;
+  recipientId: string;
+  recipientName: string;
+  status: ChatStatus;
+  lastMessage?: string | null;
+  lastMessageAt?: string | null;
+  unreadCount: number;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface ChatMessage {
+  id: string;
+  conversationId: string;
+  senderId: string;
+  senderName: string;
+  content: string;
+  isRead: boolean;
+  createdAt: string;
 }
 
 // ─── Health Score ────────────────────────────────────────────────────────────

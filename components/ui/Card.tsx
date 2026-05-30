@@ -1,10 +1,10 @@
 import React from 'react';
-import { View, StyleSheet, ViewStyle, TouchableOpacity } from 'react-native';
+import { View, StyleSheet, ViewStyle, TouchableOpacity, Animated, StyleProp } from 'react-native';
 import { Colors } from '../../constants/colors';
 
 interface CardProps {
   children: React.ReactNode;
-  style?: ViewStyle;
+  style?: StyleProp<ViewStyle>;
   onPress?: () => void;
   padding?: 'sm' | 'md' | 'lg' | 'none';
   shadow?: boolean;
@@ -27,15 +27,39 @@ export function Card({
     style,
   ].filter(Boolean) as ViewStyle[];
 
+  const [scale] = React.useState(new Animated.Value(1));
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.97,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
+
   if (onPress) {
     return (
-      <TouchableOpacity
-        style={cardStyle}
-        onPress={onPress}
-        activeOpacity={0.8}
-      >
-        {children}
-      </TouchableOpacity>
+      <Animated.View style={{ transform: [{ scale }] }}>
+        <TouchableOpacity
+          style={cardStyle}
+          onPress={onPress}
+          activeOpacity={0.85}
+          onPressIn={handlePressIn}
+          onPressOut={handlePressOut}
+          accessibilityRole="button"
+        >
+          {children}
+        </TouchableOpacity>
+      </Animated.View>
     );
   }
 
@@ -58,10 +82,10 @@ const styles = StyleSheet.create({
   },
   shadow: {
     shadowColor: Colors.neutral900,
-    shadowOffset: { width: 0, height: 1 },
-    shadowOpacity: 0.08,
-    shadowRadius: 4,
-    elevation: 2,
+    shadowOffset: { width: 0, height: 4 },
+    shadowOpacity: 0.12,
+    shadowRadius: 10,
+    elevation: 6,
   },
   border: {
     borderWidth: 1,

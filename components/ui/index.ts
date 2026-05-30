@@ -10,3 +10,4 @@ export { ScreenHeader } from './ScreenHeader';
 export { DateTimeField } from './DateTimeField';
 export { ToastProvider, useToast } from './ToastProvider';
 export { ImageUploader } from './ImageUploader';
+export { PageBanner } from './PageBanner';

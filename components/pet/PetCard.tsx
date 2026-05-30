@@ -1,51 +1,86 @@
-import React from 'react';
-import { View, Text, Image, StyleSheet, TouchableOpacity } from 'react-native';
+﻿import React from 'react';
+import { View, Text, Image, StyleSheet, TouchableOpacity, Animated } from 'react-native';
 import { Colors } from '../../constants/colors';
 import { Pet } from '../../types';
 import { calculateAge } from '../../lib/utils';
-
+ 
 interface PetCardProps {
   pet: Pet;
   onPress: () => void;
+  healthScore?: number | null;
 }
 
-function getHealthScoreColor(score: number): string {
-  if (score >= 80) return Colors.healthExcellent;
-  if (score >= 60) return Colors.healthGood;
-  if (score >= 40) return Colors.healthFair;
-  return Colors.healthPoor;
-}
+export function PetCard({ pet, onPress, healthScore }: PetCardProps) {
+  function getHealthScoreColor(score: number): string {
+    if (score >= 80) return Colors.healthExcellent;
+    if (score >= 60) return Colors.healthGood;
+    if (score >= 40) return Colors.healthFair;
+    return Colors.healthPoor;
+  }
 
-export function PetCard({ pet, onPress }: PetCardProps) {
-  const scoreColor = getHealthScoreColor(pet.healthScore ?? 70);
+  const resolvedScore =
+    typeof healthScore !== 'undefined' ? healthScore : pet.healthScore;
+  const hasScore = typeof resolvedScore === 'number' && !Number.isNaN(resolvedScore);
+  const scoreColor = hasScore
+    ? getHealthScoreColor(Math.round(resolvedScore))
+    : Colors.neutral200;
+  const [scale] = React.useState(new Animated.Value(1));
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
 
   return (
-    <TouchableOpacity style={styles.card} onPress={onPress} activeOpacity={0.8}>
-      <View style={styles.photoContainer}>
-        {pet.photoUrl ? (
-          <Image source={{ uri: pet.photoUrl }} style={styles.photo} />
-        ) : (
-          <View style={[styles.photoPlaceholder]}>
-            <Text style={styles.photoEmoji}>
-              {pet.type === 'dog' ? '🐕' : pet.type === 'cat' ? '🐈' : '🐾'}
+    <Animated.View style={{ transform: [{ scale }] }}>
+      <TouchableOpacity
+        style={styles.card}
+        onPress={onPress}
+        activeOpacity={0.8}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+      >
+        <View style={styles.photoContainer}>
+          {pet.photoUrl ? (
+            <Image source={{ uri: pet.photoUrl }} style={styles.photo} />
+          ) : (
+            <View style={[styles.photoPlaceholder]}>
+              <Text style={styles.photoEmoji}>
+                {pet.type === 'dog' ? 'ðŸ•' : pet.type === 'cat' ? 'ðŸˆ' : 'ðŸ¾'}
+              </Text>
+            </View>
+          )}
+          <View style={[styles.scoreBadge, { backgroundColor: scoreColor }]}>
+            <Text style={styles.scoreText}>
+              {hasScore ? Math.round(resolvedScore) : '–'}
             </Text>
           </View>
-        )}
-        <View style={[styles.scoreBadge, { backgroundColor: scoreColor }]}>
-          <Text style={styles.scoreText}>{pet.healthScore ?? '–'}</Text>
         </View>
-      </View>
 
-      <Text style={styles.name} numberOfLines={1}>
-        {pet.name}
-      </Text>
-      <Text style={styles.breed} numberOfLines={1}>
-        {pet.breed ?? pet.type}
-      </Text>
-      {pet.birthDate && (
-        <Text style={styles.age}>{calculateAge(pet.birthDate)}</Text>
-      )}
-    </TouchableOpacity>
+        <Text style={styles.name} numberOfLines={1}>
+          {pet.name}
+        </Text>
+        <Text style={styles.breed} numberOfLines={1}>
+          {pet.breed ?? pet.type}
+        </Text>
+        {pet.birthDate && (
+          <Text style={styles.age}>{calculateAge(pet.birthDate)}</Text>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -57,11 +92,8 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 16,
     padding: 12,
-    shadowColor: Colors.neutral900,
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.09,
-    shadowRadius: 6,
-    elevation: 3,
+    borderWidth: 1,
+    borderColor: Colors.border,
   },
   photoContainer: {
     position: 'relative',
@@ -119,3 +151,4 @@ const styles = StyleSheet.create({
     marginTop: 2,
   },
 });
+

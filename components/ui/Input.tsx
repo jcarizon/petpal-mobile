@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import { Animated } from 'react-native';
 import {
   View,
   Text,
@@ -18,6 +19,7 @@ interface InputProps extends TextInputProps {
   rightIcon?: React.ReactNode;
   isPassword?: boolean;
   containerStyle?: ViewStyle;
+  editable?: boolean;
 }
 
 export function Input({
@@ -29,10 +31,25 @@ export function Input({
   isPassword = false,
   containerStyle,
   style,
+  editable,
   ...props
 }: InputProps) {
   const [showPassword, setShowPassword] = useState(false);
   const [isFocused, setIsFocused] = useState(false);
+  const borderAnim = React.useRef(new Animated.Value(0)).current;
+
+  React.useEffect(() => {
+    Animated.timing(borderAnim, {
+      toValue: isFocused ? 1 : !!error ? 2 : 0,
+      duration: 180,
+      useNativeDriver: false,
+    }).start();
+  }, [isFocused, error, borderAnim]);
+
+  const borderColor = borderAnim.interpolate({
+    inputRange: [0, 1, 2],
+    outputRange: [Colors.border, Colors.primary, Colors.error],
+  });
 
   const secureTextEntry = isPassword ? !showPassword : false;
 
@@ -40,36 +57,40 @@ export function Input({
     <View style={[styles.container, containerStyle]}>
       {label && <Text style={styles.label}>{label}</Text>}
 
-      <View
+      <Animated.View
         style={[
           styles.inputWrapper,
-          isFocused && styles.inputWrapperFocused,
-          !!error && styles.inputWrapperError,
+          { borderColor },
         ]}
       >
         {leftIcon && <View style={styles.icon}>{leftIcon}</View>}
 
         <TextInput
-          style={[styles.input, style]}
+          style={[styles.input, style, editable === false && styles.inputDisabled]}
           placeholderTextColor={Colors.textDisabled}
           secureTextEntry={secureTextEntry}
-          onFocus={() => setIsFocused(true)}
+          onFocus={() => !editable === false && setIsFocused(true)}
           onBlur={() => setIsFocused(false)}
+          editable={editable !== false}
+          accessible
+          accessibilityLabel={label}
+          accessibilityHint={hint}
           {...props}
         />
-
         {isPassword ? (
           <TouchableOpacity
             onPress={() => setShowPassword((prev) => !prev)}
             style={styles.icon}
-            hitSlop={{ top: 8, right: 8, bottom: 8, left: 8 }}
+            hitSlop={{ top: 12, right: 12, bottom: 12, left: 12 }}
+            accessibilityRole="button"
+            accessibilityLabel={showPassword ? 'Hide password' : 'Show password'}
           >
             <Text style={styles.showHideText}>{showPassword ? 'Hide' : 'Show'}</Text>
           </TouchableOpacity>
         ) : (
           rightIcon && <View style={styles.icon}>{rightIcon}</View>
         )}
-      </View>
+      </Animated.View>
 
       {error && <Text style={styles.error}>{error}</Text>}
       {hint && !error && <Text style={styles.hint}>{hint}</Text>}
@@ -77,13 +98,14 @@ export function Input({
   );
 }
 
+
 const styles = StyleSheet.create({
   container: {
     gap: 6,
   },
   label: {
-    fontSize: 14,
-    fontWeight: '500',
+    fontSize: 16,
+    fontWeight: '600',
     color: Colors.textPrimary,
   },
   inputWrapper: {
@@ -107,6 +129,9 @@ const styles = StyleSheet.create({
     fontSize: 15,
     color: Colors.textPrimary,
     paddingVertical: 10,
+  },
+  inputDisabled: {
+    color: Colors.textDisabled,
   },
   icon: {
     marginHorizontal: 4,

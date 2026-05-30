@@ -12,33 +12,44 @@ import {
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { Sparkles, Check } from 'lucide-react-native';
 import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
 import { ImageUploader, ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
 import { DiaryMood, DiaryActivity, CreateDiaryRequest } from '../../../../types';
 
-const moodOptions: { value: DiaryMood; label: string; emoji: string }[] = [
-  { value: 'happy', label: 'Happy', emoji: '😊' },
-  { value: 'excited', label: 'Excited', emoji: '🤩' },
-  { value: 'calm', label: 'Calm', emoji: '😌' },
-  { value: 'tired', label: 'Tired', emoji: '😴' },
-  { value: 'anxious', label: 'Anxious', emoji: '😰' },
-  { value: 'sick', label: 'Sick', emoji: '🤒' },
-  { value: 'playful', label: 'Playful', emoji: '😜' },
+const moodOptions: { value: DiaryMood; label: string; emoji: string; color: string }[] = [
+  { value: 'happy', label: 'Happy', emoji: '😊', color: '#10B981' },
+  { value: 'excited', label: 'Excited', emoji: '🤩', color: '#F59E0B' },
+  { value: 'calm', label: 'Calm', emoji: '😌', color: '#3B82F6' },
+  { value: 'tired', label: 'Tired', emoji: '😴', color: '#8B5CF6' },
+  { value: 'anxious', label: 'Anxious', emoji: '😰', color: '#EF4444' },
+  { value: 'sick', label: 'Sick', emoji: '🤒', color: '#DC2626' },
+  { value: 'playful', label: 'Playful', emoji: '😜', color: '#EC4899' },
 ];
 
-const activityOptions: { value: DiaryActivity; label: string }[] = [
-  { value: 'walk', label: 'Walk' },
-  { value: 'play', label: 'Play Time' },
-  { value: 'training', label: 'Training' },
-  { value: 'grooming', label: 'Grooming' },
-  { value: 'vet_visit', label: 'Vet Visit' },
-  { value: 'feeding', label: 'Feeding' },
-  { value: 'sleeping', label: 'Sleeping' },
-  { value: 'swimming', label: 'Swimming' },
-  { value: 'other', label: 'Other' },
+const activityOptions: { value: DiaryActivity; label: string; icon: string }[] = [
+  { value: 'walk', label: 'Walk', icon: '🚶' },
+  { value: 'play', label: 'Play Time', icon: '🎾' },
+  { value: 'training', label: 'Training', icon: '🎓' },
+  { value: 'grooming', label: 'Grooming', icon: '✨' },
+  { value: 'vet_visit', label: 'Vet Visit', icon: '🏥' },
+  { value: 'feeding', label: 'Feeding', icon: '🍖' },
+  { value: 'sleeping', label: 'Sleeping', icon: '💤' },
+  { value: 'swimming', label: 'Swimming', icon: '🏊' },
+  { value: 'other', label: 'Other', icon: '📝' },
 ];
+
+const QUICK_MOOD_SUGGESTIONS: Record<DiaryMood, { title: string; content: string }> = {
+  happy: { title: 'A happy day!', content: 'Today was a great day. My pet was so happy and playful. ' },
+  excited: { title: 'Excited adventure!', content: 'My pet was super excited today! So much energy and joy. ' },
+  calm: { title: 'Peaceful day', content: 'A quiet and peaceful day. My pet enjoyed relaxing at home. ' },
+  tired: { title: 'Rest day', content: 'My pet had a tiring day and got lots of rest. ' },
+  anxious: { title: 'Anxious moments', content: 'My pet seemed a bit anxious today. Need to monitor this. ' },
+  sick: { title: 'Not feeling well', content: 'My pet isn\'t feeling well today. Monitoring closely. ' },
+  playful: { title: 'Playtime fun!', content: 'Had lots of fun playtime today! My pet loved it. ' },
+};
 
 export default function AddDiaryScreen() {
   const { id } = useLocalSearchParams<{ id: string }>();
@@ -50,9 +61,22 @@ export default function AddDiaryScreen() {
   const [content, setContent] = useState('');
   const [mood, setMood] = useState<DiaryMood | undefined>(undefined);
   const [activity, setActivity] = useState<DiaryActivity | undefined>(undefined);
-  // imageUrl is set to local URI on pick, then replaced with Cloudinary URL on upload.
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
+  const [showQuickFill, setShowQuickFill] = useState(false);
+
+  const handleQuickFill = () => {
+    if (mood) {
+      const suggestion = QUICK_MOOD_SUGGESTIONS[mood];
+      if (!title.trim()) {
+        setTitle(suggestion.title);
+      }
+      if (!content.trim()) {
+        setContent(suggestion.content);
+      }
+    }
+    setShowQuickFill(false);
+  };
 
   const handleSave = async () => {
     if (!title.trim()) {
@@ -97,7 +121,17 @@ export default function AddDiaryScreen() {
         <ScrollView showsVerticalScrollIndicator={false} style={styles.scrollView}>
           {/* Title */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Title *</Text>
+            <View style={styles.labelRow}>
+              <Text style={styles.label}>Title *</Text>
+              <TouchableOpacity 
+                style={styles.quickFillButton} 
+                onPress={() => setShowQuickFill(true)}
+                disabled={!mood}
+              >
+                <Sparkles size={14} color={mood ? Colors.secondary : Colors.neutral400} />
+                <Text style={[styles.quickFillText, !mood && styles.quickFillTextDisabled]}>Quick Fill</Text>
+              </TouchableOpacity>
+            </View>
             <TextInput
               style={styles.input}
               placeholder="e.g., A great day at the park!"
@@ -108,54 +142,56 @@ export default function AddDiaryScreen() {
             />
           </View>
 
-          {/* Mood */}
+          {/* Mood - Enhanced Card UI */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>How is your pet feeling?</Text>
-            <View style={styles.optionsGrid}>
+            <View style={styles.moodCardsContainer}>
               {moodOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   style={[
-                    styles.moodOption,
-                    mood === option.value && styles.moodOptionSelected,
+                    styles.moodCard,
+                    mood === option.value && { backgroundColor: option.color + '20', borderColor: option.color },
                   ]}
                   onPress={() => setMood(mood === option.value ? undefined : option.value)}
                 >
                   <Text style={styles.moodEmoji}>{option.emoji}</Text>
-                  <Text
-                    style={[
-                      styles.moodLabel,
-                      mood === option.value && styles.moodLabelSelected,
-                    ]}
-                  >
+                  <Text style={[
+                    styles.moodLabel,
+                    mood === option.value && { color: option.color },
+                  ]}>
                     {option.label}
                   </Text>
+                  {mood === option.value && (
+                    <View style={[styles.moodCheck, { backgroundColor: option.color }]}>
+                      <Check size={12} color={Colors.surface} strokeWidth={3} />
+                    </View>
+                  )}
                 </TouchableOpacity>
               ))}
             </View>
           </View>
 
-          {/* Activity */}
+          {/* Activity - Enhanced Chip UI */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>What did you do today?</Text>
-            <View style={styles.activityGrid}>
+            <View style={styles.activityChipsContainer}>
               {activityOptions.map((option) => (
                 <TouchableOpacity
                   key={option.value}
                   style={[
-                    styles.activityOption,
-                    activity === option.value && styles.activityOptionSelected,
+                    styles.activityChip,
+                    activity === option.value && styles.activityChipSelected,
                   ]}
                   onPress={() =>
                     setActivity(activity === option.value ? undefined : option.value)
                   }
                 >
-                  <Text
-                    style={[
-                      styles.activityLabel,
-                      activity === option.value && styles.activityLabelSelected,
-                    ]}
-                  >
+                  <Text style={styles.activityIcon}>{option.icon}</Text>
+                  <Text style={[
+                    styles.activityLabel,
+                    activity === option.value && styles.activityLabelSelected,
+                  ]}>
                     {option.label}
                   </Text>
                 </TouchableOpacity>
@@ -178,7 +214,7 @@ export default function AddDiaryScreen() {
             />
           </View>
 
-          {/* Photo — wired to Cloudinary via ImageUploader */}
+          {/* Photo */}
           <View style={styles.inputGroup}>
             <Text style={styles.label}>Add Photo (Optional)</Text>
             <ImageUploader
@@ -202,6 +238,40 @@ export default function AddDiaryScreen() {
             />
           </View>
 
+          {/* Quick Fill Modal */}
+          {showQuickFill && mood && (
+            <View style={styles.quickFillModalOverlay}>
+              <TouchableOpacity 
+                style={styles.quickFillModalBackdrop} 
+                activeOpacity={1}
+                onPress={() => setShowQuickFill(false)}
+              />
+              <View style={styles.quickFillModalContent}>
+                <View style={styles.quickFillModalHeader}>
+                  <Sparkles size={24} color={Colors.secondary} />
+                  <Text style={styles.quickFillModalTitle}>Quick Fill</Text>
+                </View>
+                <Text style={styles.quickFillModalDesc}>
+                  Pre-fill title and content with typical details for a {mood} mood.
+                </Text>
+                <View style={styles.quickFillModalActions}>
+                  <TouchableOpacity 
+                    style={styles.quickFillCancelBtn}
+                    onPress={() => setShowQuickFill(false)}
+                  >
+                    <Text style={styles.quickFillCancelText}>Skip</Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity 
+                    style={styles.quickFillConfirmBtn}
+                    onPress={handleQuickFill}
+                  >
+                    <Text style={styles.quickFillConfirmText}>Apply</Text>
+                  </TouchableOpacity>
+                </View>
+              </View>
+            </View>
+          )}
+
           <View style={styles.buttonContainer}>
             <Button
               title="Save Diary Entry"
@@ -220,12 +290,34 @@ const styles = StyleSheet.create({
   container: { flex: 1, backgroundColor: Colors.background },
   keyboardView: { flex: 1 },
   scrollView: { flex: 1, padding: 20 },
-  inputGroup: { marginBottom: 20 },
+  inputGroup: { marginBottom: 24 },
+  labelRow: {
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    alignItems: 'center',
+    marginBottom: 8,
+  },
   label: {
     fontSize: 14,
     fontWeight: '600',
     color: Colors.textPrimary,
-    marginBottom: 8,
+  },
+  quickFillButton: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 4,
+    paddingHorizontal: 10,
+    paddingVertical: 6,
+    backgroundColor: Colors.secondaryBg,
+    borderRadius: 12,
+  },
+  quickFillText: {
+    fontSize: 12,
+    fontWeight: '600',
+    color: Colors.secondary,
+  },
+  quickFillTextDisabled: {
+    color: Colors.neutral400,
   },
   input: {
     backgroundColor: Colors.surface,
@@ -237,36 +329,120 @@ const styles = StyleSheet.create({
     borderColor: Colors.border,
   },
   textArea: { minHeight: 120, paddingTop: 14 },
-  optionsGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  moodOption: {
+  moodCardsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  moodCard: {
     width: '30%',
-    paddingVertical: 12,
+    paddingVertical: 14,
     paddingHorizontal: 8,
-    borderRadius: 12,
+    borderRadius: 14,
     backgroundColor: Colors.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     alignItems: 'center',
-    gap: 4,
+    gap: 6,
+    position: 'relative',
   },
-  moodOptionSelected: {
-    backgroundColor: Colors.primaryBg,
-    borderColor: Colors.primary,
+  moodEmoji: { fontSize: 28 },
+  moodLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: '600' },
+  moodCheck: {
+    position: 'absolute',
+    top: 6,
+    right: 6,
+    width: 18,
+    height: 18,
+    borderRadius: 9,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
-  moodEmoji: { fontSize: 24 },
-  moodLabel: { fontSize: 12, color: Colors.textSecondary, fontWeight: '500' },
-  moodLabelSelected: { color: Colors.primary },
-  activityGrid: { flexDirection: 'row', flexWrap: 'wrap', gap: 8 },
-  activityOption: {
+  activityChipsContainer: {
+    flexDirection: 'row',
+    flexWrap: 'wrap',
+    gap: 10,
+  },
+  activityChip: {
+    flexDirection: 'row',
+    alignItems: 'center',
     paddingVertical: 10,
-    paddingHorizontal: 16,
+    paddingHorizontal: 14,
     borderRadius: 20,
     backgroundColor: Colors.surface,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
+    gap: 6,
   },
-  activityOptionSelected: { backgroundColor: Colors.primary, borderColor: Colors.primary },
-  activityLabel: { fontSize: 14, color: Colors.textSecondary, fontWeight: '500' },
+  activityChipSelected: {
+    backgroundColor: Colors.primary,
+    borderColor: Colors.primary,
+  },
+  activityIcon: { fontSize: 16 },
+  activityLabel: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
   activityLabelSelected: { color: Colors.surface },
   buttonContainer: { marginTop: 8, marginBottom: 32 },
+  quickFillModalOverlay: {
+    ...StyleSheet.absoluteFillObject,
+    justifyContent: 'center',
+    alignItems: 'center',
+    zIndex: 999,
+  },
+  quickFillModalBackdrop: {
+    ...StyleSheet.absoluteFillObject,
+    backgroundColor: 'rgba(0,0,0,0.5)',
+  },
+  quickFillModalContent: {
+    backgroundColor: Colors.surface,
+    borderRadius: 20,
+    padding: 24,
+    width: '100%',
+    maxWidth: 340,
+  },
+  quickFillModalHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+    marginBottom: 12,
+  },
+  quickFillModalTitle: {
+    fontSize: 20,
+    fontWeight: '700',
+    color: Colors.textPrimary,
+  },
+  quickFillModalDesc: {
+    fontSize: 14,
+    color: Colors.textSecondary,
+    lineHeight: 20,
+    marginBottom: 20,
+  },
+  quickFillModalActions: {
+    flexDirection: 'row',
+    gap: 12,
+  },
+  quickFillCancelBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    borderWidth: 1.5,
+    borderColor: Colors.border,
+    alignItems: 'center',
+  },
+  quickFillCancelText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.textSecondary,
+  },
+  quickFillConfirmBtn: {
+    flex: 1,
+    paddingVertical: 14,
+    borderRadius: 12,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+  },
+  quickFillConfirmText: {
+    fontSize: 14,
+    fontWeight: '600',
+    color: Colors.surface,
+  },
 });

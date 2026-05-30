@@ -7,6 +7,7 @@ import {
   TouchableOpacityProps,
   ViewStyle,
   TextStyle,
+  Animated,
 } from 'react-native';
 import { Colors } from '../../constants/colors';
 
@@ -36,36 +37,69 @@ export function Button({
   ...props
 }: ButtonProps) {
   const isDisabled = disabled || isLoading;
+  const [scale] = React.useState(new Animated.Value(1));
+
+  const handlePressIn = () => {
+    Animated.spring(scale, {
+      toValue: 0.96,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
+  const handlePressOut = () => {
+    Animated.spring(scale, {
+      toValue: 1,
+      useNativeDriver: true,
+      speed: 40,
+      bounciness: 8,
+    }).start();
+  };
 
   return (
-    <TouchableOpacity
-      style={[
-        styles.base,
-        styles[variant],
-        styles[`size_${size}`],
-        fullWidth && styles.fullWidth,
-        isDisabled && styles.disabled,
-        style as ViewStyle,
-      ]}
-      disabled={isDisabled}
-      activeOpacity={0.7}
-      {...props}
-    >
-      {isLoading ? (
-        <ActivityIndicator
-          size="small"
-          color={variant === 'primary' ? Colors.textInverse : Colors.primary}
-        />
-      ) : (
-        <>
-          {leftIcon}
-          <Text style={[styles.text, styles[`text_${variant}`], styles[`textSize_${size}`]]}>
-            {title}
-          </Text>
-          {rightIcon}
-        </>
-      )}
-    </TouchableOpacity>
+    <Animated.View style={{ transform: [{ scale }], width: fullWidth ? '100%' : undefined }}>
+      <TouchableOpacity
+        style={[
+          styles.base,
+          styles[variant],
+          styles[`size_${size}`],
+          fullWidth && styles.fullWidth,
+          isDisabled && styles.disabled,
+          style as ViewStyle,
+        ]}
+        disabled={isDisabled}
+        activeOpacity={0.8}
+        onPressIn={handlePressIn}
+        onPressOut={handlePressOut}
+        accessibilityRole="button"
+        accessibilityState={{ disabled: isDisabled }}
+        {...props}
+      >
+        {isLoading ? (
+          <ActivityIndicator
+            size="small"
+            color={variant === 'primary' ? Colors.textInverse : Colors.primary}
+          />
+        ) : (
+          <>
+            {leftIcon}
+            <Text
+              style={[
+                styles.text,
+                styles[`text_${variant}`],
+                styles[`textSize_${size}`],
+                variant === 'primary' && styles.textPrimaryBold,
+              ]}
+              maxFontSizeMultiplier={1.2}
+              allowFontScaling
+            >
+              {title}
+            </Text>
+            {rightIcon}
+          </>
+        )}
+      </TouchableOpacity>
+    </Animated.View>
   );
 }
 
@@ -118,6 +152,11 @@ const styles = StyleSheet.create({
   // Text base
   text: {
     fontWeight: '600',
+    letterSpacing: 0.1,
+  } as TextStyle,
+  textPrimaryBold: {
+    fontWeight: '700',
+    letterSpacing: 0.2,
   } as TextStyle,
 
   // Text variants

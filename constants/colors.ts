@@ -1,64 +1,65 @@
-// Exact landing page color palette
+// Refined color system for consistent font hierarchy and banner gradients
 export const Colors = {
-  // Primary Green - pet/nature/health - primary CTA
-  primary: '#10B981',
-  primaryLight: '#34D399',
-  primaryDark: '#059669',
-  primaryBg: '#ECFDF5',
+  primary: '#0F8554',
+  primaryLight: '#64D9A6',
+  primaryDark: '#0A6B46',
+  primaryBg: '#E6F9F2',
 
-  // Secondary Amber - warm accent, secondary CTA, warnings
   secondary: '#F59E0B',
   secondaryLight: '#FCD34D',
-  secondaryDark: '#D97706',
-  secondaryBg: '#FFFBEB',
+  secondaryDark: '#C2410C',
+  secondaryBg: '#FFF8E1',
 
-  // Semantic
-  success: '#10B981',
-  warning: '#F59E0B',
+  success: '#22C55E',
+  successBg: '#DCFCE7',
+  warning: '#F97316',
   error: '#EF4444',
-  info: '#3B82F6',
+  info: '#0EA5E9',
 
-  // Neutral scale (F9FAFB → 111827)
-  neutral50: '#F9FAFB',
-  neutral100: '#F3F4F6',
-  neutral200: '#E5E7EB',
-  neutral300: '#D1D5DB',
-  neutral400: '#9CA3AF',
-  neutral500: '#6B7280',
-  neutral600: '#4B5563',
-  neutral700: '#374151',
-  neutral800: '#1F2937',
-  neutral900: '#111827',
+  neutral50: '#F5F7FA',
+  neutral100: '#EFF2F7',
+  neutral200: '#E3E7F0',
+  neutral300: '#C8CBD7',
+  neutral400: '#94A3B8',
+  neutral500: '#64748B',
+  neutral600: '#475569',
+  neutral700: '#334155',
+  neutral800: '#1E293B',
+  neutral900: '#0F172A',
 
-  // Backgrounds
-  background: '#F9FAFB',
+  background: '#F4F7FB',
   surface: '#FFFFFF',
-  border: '#E5E7EB',
+  border: '#E2E8F0',
 
-  // Text
-  textPrimary: '#111827',
-  textSecondary: '#6B7280',
-  textDisabled: '#9CA3AF',
+  textPrimary: '#0F172A',
+  textSecondary: '#475569',
+  textDisabled: '#94A3B8',
   textInverse: '#FFFFFF',
 
-  // Service type colors (map pins)
+  heroGradientStart: '#0A6B46',
+  heroGradientEnd: '#34D399',
+  cardGradientStart: '#E6F9F2',
+  cardGradientEnd: '#D1F5EC',
+  bannerGradientStart: '#0F766E',
+  bannerGradientMid: '#14B8A6',
+  bannerGradientEnd: '#38BDF8',
+  statChipBg: '#F1F9F6',
+  accentText: '#047857',
+
   serviceVet: '#3B82F6',
   serviceGroomer: '#8B5CF6',
   servicePetShop: '#F59E0B',
   servicePark: '#10B981',
   serviceBoarding: '#EF4444',
 
-  // Alert type colors
   alertLost: '#EF4444',
   alertFound: '#10B981',
 
-  // Health score colors
   healthExcellent: '#10B981', // 80-100
   healthGood: '#F59E0B',      // 60-79
   healthFair: '#F97316',      // 40-59
   healthPoor: '#EF4444',      // 0-39
 
-  // Badge colors
   badgeVaxHero: '#3B82F6',
   badgeGroomingPro: '#8B5CF6',
   badgeRescueStar: '#EF4444',

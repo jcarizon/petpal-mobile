@@ -118,8 +118,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
         return false;
       }
 
-      const response = await api.get<User>('/users/me');
-      set({ user: response.data, isAuthenticated: true, isLoading: false });
+      const response = await api.get('/auth/profile');
+      const user = (response.data as { data?: User })?.data ?? response.data as User;
+      set({ user, isAuthenticated: true, isLoading: false });
       return true;
     } catch {
       await clearTokens();
@@ -131,8 +132,9 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   updateProfile: async (data: Partial<User>) => {
     set({ isLoading: true, error: null });
     try {
-      const response = await api.put<User>('/users/me', data);
-      set({ user: response.data, isLoading: false });
+      const response = await api.put('/auth/profile', data);
+      const payload = (response.data as { data?: User })?.data ?? response.data as User;
+      set({ user: payload, isLoading: false });
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Update failed';
       set({ error: message, isLoading: false });
