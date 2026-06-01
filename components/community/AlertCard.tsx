@@ -28,10 +28,8 @@ export const TYPE_CONFIG: Record<AlertType, {
   emoji: string;
   ctaLabel: (petName?: string) => string;
 }> = {
-  lost:     { color: '#EF4444', bgColor: '#FEF2F2', label: 'LOST',     emoji: '🚨', ctaLabel: (n) => `I Saw ${n || 'This Pet'}!`         },
-  found:    { color: '#10B981', bgColor: '#ECFDF5', label: 'FOUND',    emoji: '🐾', ctaLabel: () => 'This Is My Pet!'                      },
-  adoption: { color: '#8B5CF6', bgColor: '#F5F3FF', label: 'ADOPTION', emoji: '🏠', ctaLabel: (n) => `Adopt ${n || 'This Pet'}`           },
-  playmate: { color: '#F59E0B', bgColor: '#FFFBEB', label: 'PLAYMATE', emoji: '🐶', ctaLabel: (n) => `Meet ${n || 'This Pet'}`            },
+  lost:  { color: '#EF4444', bgColor: '#FEF2F2', label: 'LOST',  emoji: '🚨', ctaLabel: (n) => `I Saw ${n || 'This Pet'}!` },
+  found: { color: '#10B981', bgColor: '#ECFDF5', label: 'FOUND', emoji: '🐾', ctaLabel: () => 'This Is My Pet!'             },
 };
 
 // ── Props ─────────────────────────────────────────────────────────────────────
@@ -45,13 +43,12 @@ interface AlertCardProps {
 }
 
 // ── Component ─────────────────────────────────────────────────────────────────
-export function AlertCard({ alert, userLatitude, userLongitude, onPress, onSightingsPress, onFormPress }: AlertCardProps) {
-  const [expanded, setExpanded]     = useState(false);
+function AlertCardComponent({ alert, userLatitude, userLongitude, onPress, onSightingsPress, onFormPress }: AlertCardProps) {
+  const [expanded, setExpanded]       = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
 
-  const config   = TYPE_CONFIG[alert.type] ?? TYPE_CONFIG.lost;
-  const isLostFound = alert.type === 'lost' || alert.type === 'found';
-  const count    = isLostFound ? alert.sightingCount : (alert.interestCount ?? 0);
+  const config = TYPE_CONFIG[alert.type] ?? TYPE_CONFIG.lost;
+  const count  = alert.sightingCount;
   const distance = userLatitude != null && userLongitude != null
     ? calculateDistance(userLatitude, userLongitude, alert.latitude, alert.longitude)
     : null;
@@ -129,9 +126,9 @@ export function AlertCard({ alert, userLatitude, userLongitude, onPress, onSight
           />
           {photos.length > 1 && (
             <View style={styles.dots}>
-              {photos.map((_, i) => (
+              {photos.map((photo, i) => (
                 <View
-                  key={i}
+                  key={photo}
                   style={[styles.dot, i === activeSlide && styles.dotActive]}
                 />
               ))}
@@ -150,15 +147,6 @@ export function AlertCard({ alert, userLatitude, userLongitude, onPress, onSight
           </Text>
           <Text style={styles.placeholderSub}>No photo available</Text>
         </TouchableOpacity>
-      )}
-
-      {/* ── Adoption fee chip (above actions) ───────────────────── */}
-      {alert.type === 'adoption' && alert.adoptionFee !== undefined && (
-        <View style={[styles.feePill, { backgroundColor: config.bgColor }]}>
-          <Text style={[styles.feePillText, { color: config.color }]}>
-            {alert.adoptionFee === 0 ? '🆓 Free to good home' : `₱${alert.adoptionFee} adoption fee`}
-          </Text>
-        </View>
       )}
 
       {/* ── Actions row ─────────────────────────────────────────── */}
@@ -184,10 +172,17 @@ export function AlertCard({ alert, userLatitude, userLongitude, onPress, onSight
 
       {/* ── Description ─────────────────────────────────────────── */}
       <View style={styles.descWrap}>
-        <Text style={styles.descText} numberOfLines={expanded ? undefined : 1}>
-          <Text style={styles.descUsername}>{displayName} </Text>
-          {description}
-        </Text>
+        {expanded ? (
+          <Text style={styles.descText}>
+            <Text style={styles.descUsername}>{displayName} </Text>
+            {description}
+          </Text>
+        ) : (
+          <Text style={styles.descText} numberOfLines={1}>
+            <Text style={styles.descUsername}>{displayName} </Text>
+            {description}
+          </Text>
+        )}
         {!expanded && description.length > 60 && (
           <TouchableOpacity onPress={() => setExpanded(true)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
             <Text style={styles.moreText}>more</Text>
@@ -207,6 +202,8 @@ export function AlertCard({ alert, userLatitude, userLongitude, onPress, onSight
     </View>
   );
 }
+
+export const AlertCard = React.memo(AlertCardComponent);
 
 // ── Styles ────────────────────────────────────────────────────────────────────
 const styles = StyleSheet.create({

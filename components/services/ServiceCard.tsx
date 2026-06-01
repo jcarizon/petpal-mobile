@@ -286,8 +286,5 @@ const styles = StyleSheet.create({
     color: Colors.textInverse,
   },
   ctaPrimary: {},
-  ctaSecondary: {
-    borderWidth: 1,
-    borderColor: Colors.cardGradientEnd,
-  },
+  ctaSecondary: {},
 });

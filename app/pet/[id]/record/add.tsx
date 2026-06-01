@@ -111,7 +111,7 @@ export default function AddHealthRecordScreen() {
 
     try {
       const attachmentUrl = attachmentUri
-        ? await resolveImageUrl(attachmentUri, { folder: 'sightings' })
+        ? await resolveImageUrl(attachmentUri, { folder: 'diaries' })
         : undefined;
       const data: CreateHealthRecordRequest = {
         type,

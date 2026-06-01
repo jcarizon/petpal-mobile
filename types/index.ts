@@ -12,7 +12,13 @@ export interface User {
   totalXP: number;
   createdAt: string;
   role: string;
+  businessName?: string;
+  businessBio?: string;
 }
+
+export type ProviderRole = 'SERVICE_PROVIDER' | 'VET' | 'GROOMER' | 'ADMIN';
+export const isServiceProvider = (role?: string): boolean =>
+  ['SERVICE_PROVIDER', 'VET', 'GROOMER', 'ADMIN'].includes(role ?? '');
 
 export interface AuthTokens {
   accessToken: string;
@@ -147,22 +153,35 @@ export interface CreateReminderRequest {
 
 // ─── Services ────────────────────────────────────────────────────────────────
 
-export type ServiceType = 'vet' | 'groomer' | 'pet_shop' | 'park' | 'boarding' | 'other';
+export type ServiceType =
+  | 'vet' | 'emergency_vet' | 'groomer' | 'pet_store' | 'pet_hotel'
+  | 'daycare' | 'trainer' | 'spa' | 'shelter' | 'photography' | 'transportation' | 'pharmacy'
+  // legacy aliases kept for backwards compat
+  | 'pet_shop' | 'park' | 'boarding' | 'other';
 
 export interface Service {
   id: string;
+  ownerId?: string;
+  ownerName?: string;
+  ownerAvatarUrl?: string;
   name: string;
   type: ServiceType;
-  types?: ServiceType[]; // All applicable service types for combination businesses
+  types?: ServiceType[];
   address: string;
   city: string;
   latitude: number;
   longitude: number;
   phone?: string;
+  email?: string;
   website?: string;
-  hours?: string;
   description?: string;
-  photoUrls?: string[];
+  logoUrl?: string;
+  photos: string[];
+  openingHours?: Record<string, string>;
+  tags?: string[];
+  specialties?: string[];
+  facebook?: string;
+  instagram?: string;
   rating: number;
   reviewCount: number;
   isVerified: boolean;
@@ -200,7 +219,7 @@ export interface CreateReviewRequest {
 
 // ─── Alerts ──────────────────────────────────────────────────────────────────
 
-export type AlertType = 'lost' | 'found' | 'adoption' | 'playmate';
+export type AlertType = 'lost' | 'found';
 export type AlertStatus = 'active' | 'resolved';
 
 export interface Alert {
@@ -222,24 +241,9 @@ export interface Alert {
   city: string;
   photos?: string[];
   sightingCount: number;
-  interestCount?: number;
   createdAt: string;
   updatedAt: string;
   petSpecies?: string;
-
-  // Adoption fields
-  adoptionReason?: string;
-  adoptionFee?: number;
-  isNeutered?: boolean;
-  isVaccinated?: boolean;
-  idealOwnerNote?: string;
-
-  // Playmate fields
-  playmatePreferredArea?: string;
-  playmateSchedule?: string;
-  playmatePreferredSize?: 'small' | 'medium' | 'large' | 'any';
-  playmateEnergyLevel?: 'low' | 'medium' | 'high' | 'any';
-  playmateVaccineRequired?: boolean;
 }
 
 export interface CreateAlertRequest {
@@ -255,20 +259,6 @@ export interface CreateAlertRequest {
   city: string;
   contactPhone?: string;
   petId?: string | number;
-
-  // Adoption fields
-  adoptionReason?: string;
-  adoptionFee?: number;
-  isNeutered?: boolean;
-  isVaccinated?: boolean;
-  idealOwnerNote?: string;
-
-  // Playmate fields
-  playmatePreferredArea?: string;
-  playmateSchedule?: string;
-  playmatePreferredSize?: string;
-  playmateEnergyLevel?: string;
-  playmateVaccineRequired?: boolean;
 }
 
 export interface AlertFilters {
@@ -285,7 +275,7 @@ export interface AlertFilters {
   sortBy?: 'newest' | 'nearest';
 }
 
-// ─── Alert Interests ─────────────────────────────────────────────────────────
+// ─── Alert Interests (removed — moved to PawMatch) ───────────────────────────
 
 export interface AlertInterest {
   id: string;
@@ -372,6 +362,29 @@ export interface PetEvent {
   rsvpCount: number;
   createdAt: string;
   updatedAt: string;
+}
+
+// ─── Unified Community Feed ──────────────────────────────────────────────────
+
+export interface DiaryFeedEntry extends PetDiary {
+  pet: {
+    id: string;
+    name: string;
+    avatarUrl?: string;
+    species: string;
+    breed?: string;
+    owner: { id: string; name: string; city?: string; latitude?: number; longitude?: number };
+  };
+}
+
+export type FeedItemKind = 'alert' | 'story' | 'event';
+
+export interface FeedItem {
+  kind: FeedItemKind;
+  sortDate: string;
+  alert?: Alert;
+  story?: DiaryFeedEntry;
+  event?: PetEvent;
 }
 
 // ─── Notifications ───────────────────────────────────────────────────────────
@@ -502,6 +515,8 @@ export type DiaryActivity =
   | 'swimming'
   | 'other';
 
+export type DiaryVisibility = 'PRIVATE' | 'PUBLIC' | 'MATCHES_ONLY';
+
 export interface PetDiary {
   id: string;
   petId: string;
@@ -510,6 +525,8 @@ export interface PetDiary {
   mood?: DiaryMood;
   imageUrl?: string;
   activity?: DiaryActivity;
+  visibility: DiaryVisibility;
+  storyExpiresAt?: string | null;
   createdAt: string;
   updatedAt: string;
 }
@@ -520,4 +537,107 @@ export interface CreateDiaryRequest {
   mood?: DiaryMood;
   imageUrl?: string;
   activity?: DiaryActivity;
+  visibility?: DiaryVisibility;
+  shareAsStory?: boolean;
+}
+
+// ─── PawMatch ────────────────────────────────────────────────────────────────
+
+export type MatchMode = 'BREED' | 'ADOPT' | 'PLAYDATE';
+export type SwipeDirection = 'LIKE' | 'PASS';
+
+export interface PawMatchProfile {
+  id: string;
+  petId: string;
+  mode: MatchMode;
+  isActive: boolean;
+  bio?: string;
+  preferredRadius: number;
+  // Breed
+  pedigreeNote?: string;
+  // Adopt
+  adoptionFee?: number;
+  isNeutered?: boolean;
+  isVaccinated?: boolean;
+  idealOwnerNote?: string;
+  adoptionReason?: string;
+  // Playdate
+  preferredArea?: string;
+  schedule?: string;
+  preferredSize?: 'small' | 'medium' | 'large' | 'any';
+  energyLevel?: 'low' | 'medium' | 'high' | 'any';
+  vaccineRequired?: boolean;
+  createdAt: string;
+  updatedAt: string;
+  pet?: {
+    id: string;
+    name: string;
+    species: string;
+    breed?: string;
+    avatarUrl?: string;
+    owner?: {
+      id: string;
+      name: string;
+      city?: string;
+      latitude?: number;
+      longitude?: number;
+    };
+    photos?: { id: string; url: string }[];
+  };
+}
+
+export interface SwipeResult {
+  matched: boolean;
+  matchId?: string;
+  conversationId?: string;
+  modeLabel?: string;
+  petAName?: string;
+  petBName?: string;
+}
+
+export interface PawMatch {
+  id: string;
+  mode: MatchMode;
+  profileAId: string;
+  profileBId: string;
+  isActive: boolean;
+  createdAt: string;
+  profileA: PawMatchProfile;
+  profileB: PawMatchProfile;
+  conversation?: PawMatchConversation;
+}
+
+export interface PawMatchConversation {
+  id: string;
+  matchId: string;
+  createdAt: string;
+  messages: PawMatchMessage[];
+}
+
+export interface PawMatchMessage {
+  id: string;
+  conversationId: string;
+  senderPetId: string;
+  content?: string;
+  mediaUrl?: string;
+  readAt?: string;
+  createdAt: string;
+}
+
+export interface CreatePawMatchProfileRequest {
+  petId: string;
+  mode: MatchMode;
+  bio?: string;
+  preferredRadius?: number;
+  pedigreeNote?: string;
+  adoptionFee?: number;
+  isNeutered?: boolean;
+  isVaccinated?: boolean;
+  idealOwnerNote?: string;
+  adoptionReason?: string;
+  preferredArea?: string;
+  schedule?: string;
+  preferredSize?: 'small' | 'medium' | 'large' | 'any';
+  energyLevel?: 'low' | 'medium' | 'high' | 'any';
+  vaccineRequired?: boolean;
 }

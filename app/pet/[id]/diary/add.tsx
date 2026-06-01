@@ -6,6 +6,7 @@ import {
   ScrollView,
   TextInput,
   TouchableOpacity,
+  Switch,
   Alert,
   KeyboardAvoidingView,
   Platform,
@@ -17,7 +18,13 @@ import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
 import { ImageUploader, ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
-import { DiaryMood, DiaryActivity, CreateDiaryRequest } from '../../../../types';
+import { DiaryMood, DiaryActivity, DiaryVisibility, CreateDiaryRequest } from '../../../../types';
+
+const VISIBILITY_OPTIONS: { value: DiaryVisibility; label: string; desc: string }[] = [
+  { value: 'PRIVATE',      label: 'Private',      desc: 'Only me' },
+  { value: 'PUBLIC',       label: 'Story Entry',  desc: 'Posted to community feed' },
+  { value: 'MATCHES_ONLY', label: 'Matches',      desc: 'Only my PawMatch matches' },
+];
 
 const moodOptions: { value: DiaryMood; label: string; emoji: string; color: string }[] = [
   { value: 'happy', label: 'Happy', emoji: '😊', color: '#10B981' },
@@ -52,7 +59,7 @@ const QUICK_MOOD_SUGGESTIONS: Record<DiaryMood, { title: string; content: string
 };
 
 export default function AddDiaryScreen() {
-  const { id } = useLocalSearchParams<{ id: string }>();
+  const { id, visibility: paramVisibility } = useLocalSearchParams<{ id: string; visibility?: string }>();
   const router = useRouter();
   const { createDiary, isLoading } = usePetStore();
   const { showToast } = useToast();
@@ -64,6 +71,12 @@ export default function AddDiaryScreen() {
   const [imageUrl, setImageUrl] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
   const [showQuickFill, setShowQuickFill] = useState(false);
+  const [visibility, setVisibility] = useState<DiaryVisibility>(
+    paramVisibility === 'PUBLIC' || paramVisibility === 'MATCHES_ONLY'
+      ? (paramVisibility as DiaryVisibility)
+      : 'PRIVATE'
+  );
+  const [shareAsStory, setShareAsStory] = useState(false);
 
   const handleQuickFill = () => {
     if (mood) {
@@ -102,7 +115,9 @@ export default function AddDiaryScreen() {
         content: content.trim(),
         mood,
         activity,
-        imageUrl, // Cloudinary URL or undefined
+        imageUrl,
+        visibility,
+        shareAsStory,
       };
       await createDiary(id!, diaryData);
       router.back();
@@ -235,6 +250,39 @@ export default function AddDiaryScreen() {
                   });
                 }
               }}
+            />
+          </View>
+
+          {/* Visibility */}
+          <View style={styles.inputGroup}>
+            <Text style={styles.label}>Who can see this entry?</Text>
+            <View style={styles.visibilityRow}>
+              {VISIBILITY_OPTIONS.map((opt) => (
+                <TouchableOpacity
+                  key={opt.value}
+                  style={[styles.visibilityChip, visibility === opt.value && styles.visibilityChipActive]}
+                  onPress={() => setVisibility(opt.value)}
+                >
+                  <Text style={[styles.visibilityChipLabel, visibility === opt.value && styles.visibilityChipLabelActive]}>{opt.label}</Text>
+                  <Text style={[styles.visibilityChipDesc, visibility === opt.value && styles.visibilityChipDescActive]}>{opt.desc}</Text>
+                </TouchableOpacity>
+              ))}
+            </View>
+          </View>
+
+          {/* Share as Story toggle */}
+          <View style={styles.storyToggleRow}>
+            <View style={styles.storyToggleText}>
+              <Text style={styles.label}>Share as Story</Text>
+              <Text style={styles.storyToggleDesc}>
+                Appears in story circles for 24 hours
+              </Text>
+            </View>
+            <Switch
+              value={shareAsStory}
+              onValueChange={setShareAsStory}
+              trackColor={{ false: Colors.neutral200, true: Colors.primary }}
+              thumbColor={Colors.surface}
             />
           </View>
 
@@ -382,6 +430,19 @@ const styles = StyleSheet.create({
   activityLabel: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
   activityLabelSelected: { color: Colors.surface },
   buttonContainer: { marginTop: 8, marginBottom: 32 },
+  storyToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, paddingVertical: 4 },
+  storyToggleText: { flex: 1, marginRight: 12 },
+  storyToggleDesc: { fontSize: 12, color: Colors.textDisabled, marginTop: 2 },
+  visibilityRow: { flexDirection: 'row', gap: 8 },
+  visibilityChip: {
+    flex: 1, alignItems: 'center', padding: 12, borderRadius: 12,
+    backgroundColor: Colors.surface, borderWidth: 1.5, borderColor: Colors.border,
+  },
+  visibilityChipActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
+  visibilityChipLabel: { fontSize: 13, fontWeight: '700', color: Colors.textSecondary },
+  visibilityChipLabelActive: { color: Colors.primary },
+  visibilityChipDesc: { fontSize: 11, color: Colors.textDisabled, marginTop: 2 },
+  visibilityChipDescActive: { color: Colors.primaryDark },
   quickFillModalOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',

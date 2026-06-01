@@ -19,15 +19,16 @@ import { SafeAreaView, useSafeAreaInsets } from 'react-native-safe-area-context'
 import { StatusBar } from 'expo-status-bar';
 import { LinearGradient } from 'expo-linear-gradient';
 import * as Haptics from 'expo-haptics';
-import { Bell, LayoutGrid, LocateFixed, Map, MapPin, MapPinOff, RotateCcw, Search, SlidersHorizontal } from 'lucide-react-native';
+import { Bell, LayoutGrid, LocateFixed, Map, MapPin, MapPinOff, RotateCcw, Search, SlidersHorizontal, Plus } from 'lucide-react-native';
 import MapView, { Marker, Circle, PROVIDER_GOOGLE } from 'react-native-maps';
 import { Colors } from '../../constants/colors';
 import { ServiceCard } from '../../components/services/ServiceCard';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Loading } from '../../components/ui/Loading';
-import { PageBanner } from '../../components/ui';
 import { useServices } from '../../hooks/useServices';
 import { useLocation } from '../../hooks/useLocation';
+import { useAuthStore } from '../../store/authStore';
+import { isServiceProvider } from '../../types';
 import { ServiceType } from '../../types';
 import { Config } from '../../constants/config';
 import { useToast } from '../../components/ui';
@@ -124,16 +125,20 @@ const markerStyles = StyleSheet.create({
   },
 });
 
-const SERVICE_TYPES: Array<{
-  key: ServiceType | 'all';
-  label: string;
-}> = [
-  { key: 'all', label: 'All' },
-  { key: 'vet', label: 'Vets' },
-  { key: 'groomer', label: 'Groomers' },
-  { key: 'pet_shop', label: 'Pet Shop' },
-  { key: 'park', label: 'Parks' },
-  { key: 'boarding', label: 'Boarding' },
+const SERVICE_TYPES: Array<{ key: ServiceType | 'all'; label: string; emoji: string }> = [
+  { key: 'all',            label: 'All',           emoji: '🐾' },
+  { key: 'vet',            label: 'Vets',          emoji: '🏥' },
+  { key: 'emergency_vet',  label: 'Emergency',     emoji: '🚑' },
+  { key: 'groomer',        label: 'Groomers',      emoji: '✂️' },
+  { key: 'pet_store',      label: 'Pet Stores',    emoji: '🛍️' },
+  { key: 'pet_hotel',      label: 'Hotels',        emoji: '🏨' },
+  { key: 'daycare',        label: 'Daycare',       emoji: '🌞' },
+  { key: 'trainer',        label: 'Trainers',      emoji: '🎓' },
+  { key: 'spa',            label: 'Spa',           emoji: '💆' },
+  { key: 'shelter',        label: 'Shelters',      emoji: '🏠' },
+  { key: 'photography',    label: 'Photography',   emoji: '📸' },
+  { key: 'transportation', label: 'Transport',     emoji: '🚗' },
+  { key: 'pharmacy',       label: 'Pharmacy',      emoji: '💊' },
 ];
 
 const RADIUS_OPTIONS: Array<{ key: number; label: string }> = [
@@ -143,8 +148,39 @@ const RADIUS_OPTIONS: Array<{ key: number; label: string }> = [
   { key: 25, label: '25km' },
 ];
 
+function ServicesHeader({
+  router,
+  onAddService,
+}: {
+  router: ReturnType<typeof useRouter>;
+  onAddService: () => void;
+}) {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Services</Text>
+      <View style={styles.headerActions}>
+        <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/notifications')}>
+          <Bell size={20} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        <TouchableOpacity style={styles.headerCreateBtn} onPress={onAddService}>
+          <Plus size={18} color={Colors.surface} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function ServicesScreen() {
   const router = useRouter();
+  const { user } = useAuthStore();
+  const canAddService = isServiceProvider(user?.role);
+  const handleAddService = () => {
+    if (canAddService) {
+      router.push('/service/create');
+    } else {
+      router.push('/settings/become-provider');
+    }
+  };
   const mapCameraRef = useRef<any>(null);
   const insets = useSafeAreaInsets();
   const { coordinates, getCurrentLocation, isLoading: isLocationLoading } = useLocation();
@@ -271,21 +307,7 @@ export default function ServicesScreen() {
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
       <StatusBar style="dark" />
-      <PageBanner
-        title="Services"
-        subtitle="Discover trusted pet services near your current location."
-        helper="Filters adjust your radius and categories. Switch between cards and map."
-        iconNode={<MapPin size={18} color={Colors.textInverse} />}
-        style={[styles.serviceBanner, { marginTop: 0 }]}
-        rightNode={
-          <TouchableOpacity
-            style={styles.headerBtn}
-            onPress={() => router.push('/notifications')}
-          >
-            <Bell size={18} color={Colors.textInverse} />
-          </TouchableOpacity>
-        }
-      />
+      <ServicesHeader router={router} onAddService={handleAddService} />
       <View style={styles.screenBody}>
     <View style={styles.filterToolbar}>
         <View style={styles.filterToolbarLeft}>
@@ -544,7 +566,7 @@ export default function ServicesScreen() {
                   }}
                 >
                   <Text style={[styles.optionChipText, draftType === item.key && styles.optionChipTextActive]}>
-                    {item.label}
+                    {item.emoji} {item.label}
                   </Text>
                 </Pressable>
               ))}
@@ -676,15 +698,39 @@ const styles = StyleSheet.create({
   screenBody: {
     flex: 1,
   },
-  serviceBanner: {
-    marginTop: 0,
-    marginBottom: 8,
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
   },
-  headerBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.neutral100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCreateBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

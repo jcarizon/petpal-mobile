@@ -18,7 +18,7 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import { PawPrint, Plus, ChevronRight, ChevronLeft, HeartPulse, Stethoscope, CalendarDays, Scale, LayoutGrid, List, Bell } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { EmptyState } from '../../components/ui/EmptyState';
-import { PageBanner, Badge } from '../../components/ui';
+import { Badge } from '../../components/ui';
 import { Loading } from '../../components/ui/Loading';
 import { usePetStore } from '../../store/petStore';
 import { calculateAge } from '../../lib/utils';
@@ -27,12 +27,47 @@ const { width } = Dimensions.get('window');
 const CARD_WIDTH = width - 40;
 const SWIPE_THRESHOLD = width * 0.22;
 
+function PetsHeader({
+  router,
+  petsCount,
+  viewMode,
+  onToggleView,
+}: {
+  router: ReturnType<typeof useRouter>;
+  petsCount: number;
+  viewMode: 'cards' | 'list';
+  onToggleView: () => void;
+}) {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>My Pets</Text>
+      <View style={styles.headerActions}>
+        <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/notifications')}>
+          <Bell size={20} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        {petsCount > 1 && (
+          <TouchableOpacity style={styles.headerIconBtn} onPress={onToggleView}>
+            {viewMode === 'cards' ? (
+              <List size={20} color={Colors.textPrimary} />
+            ) : (
+              <LayoutGrid size={20} color={Colors.textPrimary} />
+            )}
+          </TouchableOpacity>
+        )}
+        <TouchableOpacity style={styles.headerCreateBtn} onPress={() => router.push('/pet/add')}>
+          <Plus size={18} color={Colors.surface} />
+        </TouchableOpacity>
+      </View>
+    </View>
+  );
+}
+
 export default function PetsScreen() {
   const router = useRouter();
   const { pets, fetchPets, healthScores, fetchHealthRecords, isLoading } = usePetStore();
   const [refreshing, setRefreshing] = React.useState(false);
   const [currentIndex, setCurrentIndex] = React.useState(0);
-  const [viewMode, setViewMode] = React.useState<'cards' | 'list'>('cards');
+  const [viewMode, setViewMode] = React.useState<'cards' | 'list'>('list');
   const pan = React.useRef(new Animated.ValueXY()).current;
   
   const swipeHintOpacity = useRef(new Animated.Value(1)).current;
@@ -128,7 +163,7 @@ export default function PetsScreen() {
   }, []);
 
   useEffect(() => {
-    if (pets.length > 1 && !hasInteracted.current) {
+    if (viewMode === 'cards' && pets.length > 1 && !hasInteracted.current) {
       const animation = Animated.loop(
         Animated.sequence([
           Animated.timing(swipeHintOpacity, {
@@ -159,10 +194,10 @@ export default function PetsScreen() {
         clearTimeout(hideTimer);
       };
     }
-  }, []);
+  }, [pets.length, swipeHintOpacity, viewMode]);
 
   useEffect(() => {
-    if (pets.length > 1 && !hasInteracted.current) {
+    if (viewMode === 'cards' && pets.length > 1 && !hasInteracted.current) {
       const tiltAnimation = Animated.sequence([
         Animated.timing(cardTilt, {
           toValue: 1,
@@ -188,7 +223,7 @@ export default function PetsScreen() {
       
       return () => clearTimeout(timer);
     }
-  }, []);
+  }, [cardTilt, pets.length, viewMode]);
 
   const handlePanResponderMove = (_: GestureResponderEvent, gesture: { dx: number; dy: number }) => {
     if (!hasInteracted.current) {
@@ -217,40 +252,12 @@ export default function PetsScreen() {
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <PageBanner
-        title="My Pets"
-        subtitle="Swipe through your crew or add a new companion."
-        helper={viewMode === 'cards' ? "Swipe left or right to browse your pets." : `${pets.length} pet${pets.length !== 1 ? 's' : ''}`}
-        iconNode={<PawPrint size={16} color={Colors.textInverse} />}
-        rightNode={
-          <View style={styles.headerActions}>
-            <TouchableOpacity
-              style={styles.headerBtn}
-              onPress={() => router.push('/notifications')}
-            >
-              <Bell size={18} color={Colors.textInverse} />
-            </TouchableOpacity>
-            {pets.length > 1 && (
-              <TouchableOpacity
-                style={styles.viewToggleButton}
-                onPress={() => setViewMode(viewMode === 'cards' ? 'list' : 'cards')}
-              >
-                {viewMode === 'cards' ? (
-                  <List size={18} color={Colors.primary} />
-                ) : (
-                  <LayoutGrid size={18} color={Colors.primary} />
-                )}
-              </TouchableOpacity>
-            )}
-            <TouchableOpacity
-              style={styles.addButton}
-              onPress={() => router.push('/pet/add')}
-            >
-              <Plus size={20} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-        }
-/>
+      <PetsHeader
+        router={router}
+        petsCount={pets.length}
+        viewMode={viewMode}
+        onToggleView={() => setViewMode(viewMode === 'cards' ? 'list' : 'cards')}
+      />
 
       {pets.length === 0 ? (
         <EmptyState
@@ -457,32 +464,39 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
+  header: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
   headerActions: {
     flexDirection: 'row',
     alignItems: 'center',
     gap: 8,
   },
-  headerBtn: {
-    width: 34,
-    height: 34,
-    borderRadius: 10,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.neutral100,
     alignItems: 'center',
     justifyContent: 'center',
   },
-  viewToggleButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.textInverse,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  addButton: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: Colors.textInverse,
+  headerCreateBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

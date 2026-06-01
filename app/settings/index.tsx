@@ -12,7 +12,7 @@ import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft, User, Bell, Lock, Info,
-  LogOut, ChevronRight, Phone, MapPin, Mail,
+  LogOut, ChevronRight, Phone, MapPin, Mail, Trash2,
 } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { Input } from '../../components/ui/Input';
@@ -23,7 +23,7 @@ import { useToast } from '../../components/ui';
 
 export default function SettingsScreen() {
   const router = useRouter();
-  const { user, updateProfile, logout } = useAuthStore();
+  const { user, updateProfile, logout, deleteAccount } = useAuthStore();
   const { showToast } = useToast();
 
   const [editingProfile, setEditingProfile] = useState(false);
@@ -33,6 +33,7 @@ export default function SettingsScreen() {
   const [saving,      setSaving]      = useState(false);
   const [avatarUrl,   setAvatarUrl]   = useState(user?.avatarUrl ?? '');
   const [isUploading, setIsUploading] = useState(false);
+  const [deletingAccount, setDeletingAccount] = useState(false);
 
   const [pushEnabled, setPushEnabled] = useState(true);
   const [emailEnabled, setEmailEnabled] = useState(false);
@@ -70,6 +71,33 @@ export default function SettingsScreen() {
       { text: 'Cancel', style: 'cancel' },
       { text: 'Sign Out', style: 'destructive', onPress: logout },
     ]);
+  };
+
+  const handleDeleteAccount = () => {
+    Alert.alert(
+      'Delete Account',
+      'This will permanently delete your account and related PetPal data. This action cannot be undone.',
+      [
+        { text: 'Cancel', style: 'cancel' },
+        {
+          text: 'Delete Account',
+          style: 'destructive',
+          onPress: async () => {
+            setDeletingAccount(true);
+            try {
+              await deleteAccount();
+            } catch {
+              setDeletingAccount(false);
+              showToast({
+                type: 'error',
+                title: 'Delete failed',
+                message: 'Please try again or contact support.',
+              });
+            }
+          },
+        },
+      ]
+    );
   };
 
   return (
@@ -189,8 +217,15 @@ export default function SettingsScreen() {
             sub="Weekly digest & important updates"
             value={emailEnabled}
             onChange={setEmailEnabled}
-            last
           />
+          <TouchableOpacity
+            style={styles.navRow}
+            onPress={() => router.push('/settings/notifications')}
+            activeOpacity={0.7}
+          >
+            <Text style={styles.navRowLabel}>Notification History & Type Settings</Text>
+            <ChevronRight size={16} color={Colors.textSecondary} />
+          </TouchableOpacity>
         </View>
 
         {/* ── Security ──────────────────────────────────── */}
@@ -219,6 +254,18 @@ export default function SettingsScreen() {
         <TouchableOpacity style={styles.signOutBtn} onPress={handleLogout} activeOpacity={0.75}>
           <LogOut size={16} color={Colors.error} />
           <Text style={styles.signOutText}>Sign Out</Text>
+        </TouchableOpacity>
+
+        <TouchableOpacity
+          style={[styles.deleteAccountBtn, deletingAccount && styles.disabledAction]}
+          onPress={handleDeleteAccount}
+          activeOpacity={0.75}
+          disabled={deletingAccount}
+        >
+          <Trash2 size={16} color={Colors.surface} />
+          <Text style={styles.deleteAccountText}>
+            {deletingAccount ? 'Deleting Account...' : 'Delete Account'}
+          </Text>
         </TouchableOpacity>
 
       </ScrollView>
@@ -423,10 +470,41 @@ const styles = StyleSheet.create({
     borderColor: '#FECACA',
     backgroundColor: '#FEF2F2',
   },
+  deleteAccountBtn: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
+    paddingVertical: 15,
+    borderRadius: 16,
+    backgroundColor: Colors.error,
+  },
+  disabledAction: {
+    opacity: 0.6,
+  },
+  navRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 14,
+    paddingVertical: 14,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: Colors.border,
+  },
+  navRowLabel: {
+    fontSize: 14,
+    color: Colors.textPrimary,
+    fontWeight: '500',
+  },
   signOutText: {
     fontSize: 14,
     fontWeight: '700',
     color: Colors.error,
+  },
+  deleteAccountText: {
+    fontSize: 14,
+    fontWeight: '700',
+    color: Colors.surface,
   },
   avatarRow: {
     flexDirection: 'row',

@@ -3,14 +3,13 @@ import api from '../lib/api';
 import { useAuthStore } from './authStore';
 import {
   Alert,
-  AlertInterest,
   Sighting,
   Badge,
   LeaderboardEntry,
   PetEvent,
+  DiaryFeedEntry,
   CreateAlertRequest,
   CreateSightingRequest,
-  CreateInterestRequest,
   AlertFilters,
   AlertStatus,
 } from '../types';
@@ -50,19 +49,6 @@ type ApiAlert = {
   } | null;
   sightings?: ApiSighting[];
 
-  // Adoption fields
-  adoptionReason?: string;
-  adoptionFee?: number;
-  isNeutered?: boolean;
-  isVaccinated?: boolean;
-  idealOwnerNote?: string;
-
-  // Playmate fields
-  playmatePreferredArea?: string;
-  playmateSchedule?: string;
-  playmatePreferredSize?: string;
-  playmateEnergyLevel?: string;
-  playmateVaccineRequired?: boolean;
 };
 
 const normalizeAlert = (a: ApiAlert): Alert => ({
@@ -85,23 +71,9 @@ const normalizeAlert = (a: ApiAlert): Alert => ({
   longitude: a.lastSeenLongitude ?? a.longitude ?? 0,
   city: a.lastSeenAddress ?? a.city ?? '',
   sightingCount: a._count?.sightings ?? a.sightingCount ?? 0,
-  interestCount: a._count?.interests,
   createdAt: a.createdAt,
   updatedAt: a.updatedAt,
 
-  // Adoption fields
-  adoptionReason: a.adoptionReason,
-  adoptionFee: a.adoptionFee,
-  isNeutered: a.isNeutered,
-  isVaccinated: a.isVaccinated,
-  idealOwnerNote: a.idealOwnerNote,
-
-  // Playmate fields
-  playmatePreferredArea: a.playmatePreferredArea,
-  playmateSchedule: a.playmateSchedule,
-  playmatePreferredSize: a.playmatePreferredSize as Alert['playmatePreferredSize'],
-  playmateEnergyLevel: a.playmateEnergyLevel as Alert['playmateEnergyLevel'],
-  playmateVaccineRequired: a.playmateVaccineRequired,
 });
 
 type ApiSighting = {
@@ -131,40 +103,32 @@ const normalizeSighting = (s: ApiSighting, fallbackUserName?: string): Sighting 
   createdAt: s.createdAt,
 });
 
-type ApiInterest = {
-  id: string;
-  alertId: string;
-  userId: string;
-  message?: string | null;
-  createdAt: string;
-  user?: { id: string; name?: string; avatarUrl?: string; phone?: string };
-};
-
-const normalizeInterest = (i: ApiInterest): import('../types').AlertInterest => ({
-  id: i.id,
-  alertId: i.alertId,
-  userId: i.userId,
-  userName: i.user?.name ?? '',
-  userAvatarUrl: i.user?.avatarUrl,
-  userPhone: i.user?.phone ?? undefined,
-  message: i.message ?? undefined,
-  createdAt: i.createdAt,
-});
 
 interface CommunityState {
   alerts: Alert[];
+  userAlerts: Alert[];
   activeFilters: AlertFilters;
   selectedAlert: Alert | null;
   sightings: Record<string, Sighting[]>;
-  interests: Record<string, AlertInterest[]>;
   events: PetEvent[];
   selectedEvent: PetEvent | null;
+  diaryFeed: DiaryFeedEntry[];
   badges: Badge[];
   leaderboard: LeaderboardEntry[];
   isLoading: boolean;
   error: string | null;
 
-  fetchAlerts: (filters?: AlertFilters) => Promise<void>;
+  // Pagination state
+  alertsPage: number;
+  alertsLimit: number;
+  hasMoreAlerts: boolean;
+  diaryFeedPage: number;
+  diaryFeedLimit: number;
+  hasMoreDiaryFeed: boolean;
+  isLoadingMore: boolean;
+
+  fetchAlerts: (filters?: AlertFilters, page?: number, limit?: number) => Promise<void>;
+  fetchMoreAlerts: (filters?: AlertFilters) => Promise<void>;
   setFilters: (filters: AlertFilters) => void;
   clearSelectedAlert: () => void;
   fetchUserAlerts: (userId: string) => Promise<void>;
@@ -175,12 +139,11 @@ interface CommunityState {
   fetchSightings: (alertId: string) => Promise<void>;
   createSighting: (alertId: string, data: CreateSightingRequest) => Promise<void>;
 
-  fetchInterests: (alertId: string) => Promise<void>;
-  createInterest: (alertId: string, data: CreateInterestRequest) => Promise<void>;
-  withdrawInterest: (alertId: string) => Promise<void>;
-
+  fetchEvents: () => Promise<void>;
   fetchEvent: (id: string) => Promise<void>;
   rsvpEvent: (eventId: string) => Promise<void>;
+  fetchDiaryFeed: (lat: number, lng: number, radius?: number, page?: number, limit?: number) => Promise<void>;
+  fetchMoreDiaryFeed: (lat: number, lng: number, radius?: number) => Promise<void>;
 
   fetchBadges: () => Promise<void>;
   fetchLeaderboard: (city?: string) => Promise<void>;
@@ -190,10 +153,11 @@ interface CommunityState {
 
 export const useCommunityStore = create<CommunityState>((set) => ({
   alerts: [],
+  userAlerts: [],
   activeFilters: { radiusKm: 10 },
   selectedAlert: null,
+  diaryFeed: [],
   sightings: {},
-  interests: {},
   events: [],
   selectedEvent: null,
   badges: [],
@@ -201,11 +165,20 @@ export const useCommunityStore = create<CommunityState>((set) => ({
   isLoading: false,
   error: null,
 
+  // Pagination initialization
+  alertsPage: 1,
+  alertsLimit: 20,
+  hasMoreAlerts: true,
+  diaryFeedPage: 1,
+  diaryFeedLimit: 20,
+  hasMoreDiaryFeed: true,
+  isLoadingMore: false,
+
   setFilters: (filters: AlertFilters) => set({ activeFilters: filters }),
   clearSelectedAlert: () => set({ selectedAlert: null }),
 
-  fetchAlerts: async (filters?: AlertFilters) => {
-    set({ isLoading: true, error: null });
+  fetchAlerts: async (filters?: AlertFilters, page = 1, limit = 20) => {
+    set({ isLoading: page === 1, error: null, isLoadingMore: page > 1 });
     try {
       const params = new URLSearchParams();
       if (filters?.type) params.append('type', filters.type);
@@ -218,6 +191,10 @@ export const useCommunityStore = create<CommunityState>((set) => ({
       if (filters?.species) params.append('species', filters.species);
       if (filters?.breed?.trim()) params.append('breed', filters.breed.trim());
       if (filters?.dateRange && filters.dateRange !== 'any') params.append('dateRange', filters.dateRange);
+      
+      // Add pagination parameters — backend uses page + limit
+      params.append('page', String(page));
+      params.append('limit', String(limit));
 
       const query = params.toString();
       const response = await api.get(`/community/lost-found${query ? `?${query}` : ''}`);
@@ -235,11 +212,25 @@ export const useCommunityStore = create<CommunityState>((set) => ({
         });
       }
 
-      set({ alerts: normalized, isLoading: false });
+      const hasMore = normalized.length === limit;
+      set((state) => ({
+        alerts: page === 1 ? normalized : [...state.alerts, ...normalized],
+        alertsPage: page,
+        alertsLimit: limit,
+        hasMoreAlerts: hasMore,
+        isLoading: false,
+        isLoadingMore: false,
+      }));
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to fetch alerts';
-      set({ error: message, isLoading: false });
+      set({ error: message, isLoading: false, isLoadingMore: false });
     }
+  },
+
+  fetchMoreAlerts: async (filters?: AlertFilters) => {
+    const state = useCommunityStore.getState();
+    if (!state.hasMoreAlerts || state.isLoadingMore) return;
+    await state.fetchAlerts(filters, state.alertsPage + 1, state.alertsLimit);
   },
 
   fetchUserAlerts: async (userId: string) => {
@@ -254,7 +245,7 @@ export const useCommunityStore = create<CommunityState>((set) => ({
       const userActive = Array.isArray(activeAlerts) ? activeAlerts.filter(a => a.userId === userId) : [];
       const userResolved = Array.isArray(resolvedAlerts) ? resolvedAlerts.filter(a => a.userId === userId) : [];
       const allAlerts = [...userActive, ...userResolved];
-      set({ alerts: allAlerts.map(normalizeAlert), isLoading: false });
+      set({ userAlerts: allAlerts.map(normalizeAlert), isLoading: false });
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to fetch user alerts';
       set({ error: message, isLoading: false });
@@ -301,20 +292,6 @@ export const useCommunityStore = create<CommunityState>((set) => ({
         lastSeenLongitude: data.longitude,
         ...(data.petId ? { petId: data.petId } : {}),
         ...(data.photoUrl ? { photoUrl: data.photoUrl } : {}),
-
-        // Adoption fields
-        ...(data.adoptionReason !== undefined ? { adoptionReason: data.adoptionReason } : {}),
-        ...(data.adoptionFee !== undefined ? { adoptionFee: data.adoptionFee } : {}),
-        ...(data.isNeutered !== undefined ? { isNeutered: data.isNeutered } : {}),
-        ...(data.isVaccinated !== undefined ? { isVaccinated: data.isVaccinated } : {}),
-        ...(data.idealOwnerNote !== undefined ? { idealOwnerNote: data.idealOwnerNote } : {}),
-
-        // Playmate fields
-        ...(data.playmatePreferredArea !== undefined ? { playmatePreferredArea: data.playmatePreferredArea } : {}),
-        ...(data.playmateSchedule !== undefined ? { playmateSchedule: data.playmateSchedule } : {}),
-        ...(data.playmatePreferredSize !== undefined ? { playmatePreferredSize: data.playmatePreferredSize } : {}),
-        ...(data.playmateEnergyLevel !== undefined ? { playmateEnergyLevel: data.playmateEnergyLevel } : {}),
-        ...(data.playmateVaccineRequired !== undefined ? { playmateVaccineRequired: data.playmateVaccineRequired } : {}),
       };
 
       const response = await api.post('/community/lost-found', body);
@@ -322,6 +299,7 @@ export const useCommunityStore = create<CommunityState>((set) => ({
 
       set((state) => ({
         alerts: [newAlert, ...state.alerts],
+        userAlerts: [newAlert, ...state.userAlerts],
         isLoading: false,
       }));
 
@@ -340,6 +318,7 @@ export const useCommunityStore = create<CommunityState>((set) => ({
       const updated = normalizeAlert(unwrapApiData<ApiAlert>(response.data));
       set((state) => ({
         alerts: state.alerts.map((a) => (a.id === id ? updated : a)),
+        userAlerts: state.userAlerts.map((a) => (a.id === id ? updated : a)),
         selectedAlert: state.selectedAlert?.id === id ? updated : state.selectedAlert,
         isLoading: false,
       }));
@@ -402,6 +381,11 @@ export const useCommunityStore = create<CommunityState>((set) => ({
             ? { ...a, sightingCount: (a.sightingCount ?? 0) + 1 }
             : a
         ),
+        userAlerts: state.userAlerts.map((a) =>
+          a.id === alertId
+            ? { ...a, sightingCount: (a.sightingCount ?? 0) + 1 }
+            : a
+        ),
         isLoading: false,
       }));
     } catch (err) {
@@ -411,61 +395,58 @@ export const useCommunityStore = create<CommunityState>((set) => ({
     }
   },
 
-  fetchInterests: async (alertId: string) => {
-    set({ isLoading: true, error: null });
+  fetchEvents: async () => {
     try {
-      const response = await api.get(`/community/lost-found/${alertId}/interests`);
-      const list = unwrapApiData<ApiInterest[]>(response.data);
-      set((state) => ({
-        interests: { ...state.interests, [alertId]: Array.isArray(list) ? list.map(normalizeInterest) : [] },
-        isLoading: false,
+      const res = await api.get('/community/events?limit=50');
+      const raw = unwrapApiData<Record<string, unknown>[]>(res.data);
+      const list = Array.isArray(raw) ? raw : [];
+      const mapped: PetEvent[] = list.map((e) => ({
+        id: e.id as string,
+        title: e.title as string,
+        description: e.description as string | undefined,
+        location: e.location as string,
+        latitude: e.latitude as number | undefined,
+        longitude: e.longitude as number | undefined,
+        startDate: e.startDate as string,
+        endDate: e.endDate as string | undefined,
+        imageUrl: e.imageUrl as string | undefined,
+        maxRsvps: e.maxRsvps as number | undefined,
+        rsvpCount: (e._count as Record<string, number> | undefined)?.rsvps ?? (e.rsvpCount as number) ?? 0,
+        createdAt: e.createdAt as string,
+        updatedAt: e.updatedAt as string,
       }));
+      set({ events: mapped });
     } catch (err) {
-      const message = (err as { message: string }).message ?? 'Failed to fetch interests';
-      set({ error: message, isLoading: false });
+      console.error('fetchEvents failed:', err);
     }
   },
 
-  createInterest: async (alertId: string, data: CreateInterestRequest) => {
-    set({ isLoading: true, error: null });
+  fetchDiaryFeed: async (lat: number, lng: number, radius = 25, page = 1, limit = 20) => {
     try {
-      await api.post(`/community/lost-found/${alertId}/interests`, data);
+      const offset = (page - 1) * limit;
+      const res = await api.get(`/pets/diary/feed?lat=${lat}&lng=${lng}&radius=${radius}&limit=${limit}&offset=${offset}`);
+      const raw = unwrapApiData<DiaryFeedEntry[]>(res.data);
+      const items = Array.isArray(raw) ? raw : [];
+      const hasMore = items.length === limit;
+      
       set((state) => ({
-        alerts: state.alerts.map((a) =>
-          a.id === alertId ? { ...a, interestCount: (a.interestCount ?? 0) + 1 } : a
-        ),
-        selectedAlert:
-          state.selectedAlert?.id === alertId
-            ? { ...state.selectedAlert, interestCount: (state.selectedAlert.interestCount ?? 0) + 1 }
-            : state.selectedAlert,
-        isLoading: false,
+        diaryFeed: page === 1 ? items : [...state.diaryFeed, ...items],
+        diaryFeedPage: page,
+        diaryFeedLimit: limit,
+        hasMoreDiaryFeed: hasMore,
+        isLoadingMore: false,
       }));
     } catch (err) {
-      const message = (err as { message: string }).message ?? 'Failed to express interest';
-      set({ error: message, isLoading: false });
-      throw err;
+      console.error('fetchDiaryFeed failed:', err);
+      set({ isLoadingMore: false });
     }
   },
 
-  withdrawInterest: async (alertId: string) => {
-    set({ isLoading: true, error: null });
-    try {
-      await api.delete(`/community/lost-found/${alertId}/interests/me`);
-      set((state) => ({
-        alerts: state.alerts.map((a) =>
-          a.id === alertId ? { ...a, interestCount: Math.max(0, (a.interestCount ?? 1) - 1) } : a
-        ),
-        selectedAlert:
-          state.selectedAlert?.id === alertId
-            ? { ...state.selectedAlert, interestCount: Math.max(0, (state.selectedAlert.interestCount ?? 1) - 1) }
-            : state.selectedAlert,
-        isLoading: false,
-      }));
-    } catch (err) {
-      const message = (err as { message: string }).message ?? 'Failed to withdraw interest';
-      set({ error: message, isLoading: false });
-      throw err;
-    }
+  fetchMoreDiaryFeed: async (lat: number, lng: number, radius = 25) => {
+    const state = useCommunityStore.getState();
+    if (!state.hasMoreDiaryFeed || state.isLoadingMore) return;
+    set({ isLoadingMore: true });
+    await state.fetchDiaryFeed(lat, lng, radius, state.diaryFeedPage + 1, state.diaryFeedLimit);
   },
 
   fetchEvent: async (id: string) => {
@@ -502,6 +483,10 @@ export const useCommunityStore = create<CommunityState>((set) => ({
         selectedEvent: state.selectedEvent?.id === eventId
           ? { ...state.selectedEvent, rsvpCount: state.selectedEvent.rsvpCount + 1 }
           : state.selectedEvent,
+        // Also update the events list so EventFeedCard reflects the new count immediately
+        events: state.events.map((e) =>
+          e.id === eventId ? { ...e, rsvpCount: e.rsvpCount + 1 } : e
+        ),
         isLoading: false,
       }));
     } catch (err) {

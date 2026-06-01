@@ -20,8 +20,7 @@ const queryClient = new QueryClient({
 });
 
 function RootLayoutNav() {
-  const { isAuthenticated, autoLogin } = useAuthStore();
-
+  const { isAuthenticated, isLoading, autoLogin } = useAuthStore();
 
   // Initial auto-login attempt on cold start
   useEffect(() => {
@@ -44,6 +43,9 @@ function RootLayoutNav() {
     register();
   }, [isAuthenticated]);
 
+  // Don't show FAB while loading or when not authenticated
+  const showFAB = isAuthenticated && !isLoading;
+
   return (
     <View style={styles.rootNav}>
       <Stack screenOptions={{ headerShown: false }}>
@@ -58,7 +60,7 @@ function RootLayoutNav() {
         <Stack.Screen name="chat" options={{ headerShown: false }} />
         <Stack.Screen name="community" options={{ headerShown: false }} />
       </Stack>
-      {isAuthenticated && <ChatFAB />}
+      {showFAB && <ChatFAB />}
     </View>
   );
 }

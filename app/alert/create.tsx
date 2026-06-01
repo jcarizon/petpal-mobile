@@ -36,21 +36,19 @@ const ALERT_TYPE_OPTIONS: Array<{
   color: string;
   bgColor: string;
 }> = [
-  { type: 'lost',     emoji: '🚨', title: 'Lost Pet',    subtitle: 'My pet is missing',       color: '#EF4444', bgColor: '#FEF2F2' },
-  { type: 'found',    emoji: '🐾', title: 'Found Pet',   subtitle: 'I found a stray',          color: '#10B981', bgColor: '#ECFDF5' },
-  { type: 'adoption', emoji: '🏠', title: 'For Adoption',subtitle: 'Looking for a new home',   color: '#8B5CF6', bgColor: '#F5F3FF' },
-  { type: 'playmate', emoji: '🐶', title: 'Playmate',    subtitle: 'Looking for a playdate',   color: '#F59E0B', bgColor: '#FFFBEB' },
+  { type: 'lost',  emoji: '🚨', title: 'Lost Pet',  subtitle: 'My pet is missing', color: '#EF4444', bgColor: '#FEF2F2' },
+  { type: 'found', emoji: '🐾', title: 'Found Pet', subtitle: 'I found a stray',   color: '#10B981', bgColor: '#ECFDF5' },
 ];
 
 export default function CreateAlertScreen() {
   const router = useRouter();
-  const { petId: paramPetId } = useLocalSearchParams<{ petId?: string }>();
+  const { petId: paramPetId, type: paramType } = useLocalSearchParams<{ petId?: string; type?: string }>();
   const { createAlert, isLoading } = useCommunityStore();
   const { pets, fetchPets } = usePetStore();
   const { coordinates, city, getCurrentLocation } = useLocation();
   const { showToast } = useToast();
 
-  const [type, setType] = useState<AlertType>('lost');
+  const [type, setType] = useState<AlertType>(paramType === 'found' ? 'found' : 'lost');
   const [title, setTitle] = useState('');
   const [description, setDescription] = useState('');
   const [selectedPetId, setSelectedPetId] = useState<string | undefined>();
@@ -63,20 +61,6 @@ export default function CreateAlertScreen() {
   const MAX_PHOTOS = 6;
   const [errors, setErrors] = useState<{ title?: string; location?: string }>({});
 
-  // Adoption fields
-  const [adoptionReason, setAdoptionReason] = useState('');
-  const [adoptionFee, setAdoptionFee] = useState('');
-  const [adoptionFeeIsFree, setAdoptionFeeIsFree] = useState(false);
-  const [isNeutered, setIsNeutered] = useState<boolean | undefined>();
-  const [isVaccinated, setIsVaccinated] = useState<boolean | undefined>();
-  const [idealOwnerNote, setIdealOwnerNote] = useState('');
-
-  // Playmate fields
-  const [playmatePreferredArea, setPlaymatePreferredArea] = useState('');
-  const [playmateSchedule, setPlaymateSchedule] = useState('');
-  const [playmatePreferredSize, setPlaymatePreferredSize] = useState<string>('any');
-  const [playmateEnergyLevel, setPlaymateEnergyLevel] = useState<string>('any');
-  const [playmateVaccineRequired, setPlaymateVaccineRequired] = useState(false);
   const [showLocationModal, setShowLocationModal] = useState(false);
   const [tempCoordinates, setTempCoordinates] = useState<Coordinates | null>(coordinates);
   const mapRef = useRef<MapView>(null);
@@ -203,23 +187,6 @@ export default function CreateAlertScreen() {
         longitude: coordinates.longitude,
         city: city ?? 'Cebu City',
 
-        // Adoption fields
-        ...(type === 'adoption' && {
-          adoptionReason: adoptionReason.trim() || undefined,
-          adoptionFee: adoptionFeeIsFree ? 0 : (adoptionFee ? Number(adoptionFee) : undefined),
-          isNeutered: isNeutered,
-          isVaccinated: isVaccinated,
-          idealOwnerNote: idealOwnerNote.trim() || undefined,
-        }),
-
-        // Playmate fields
-        ...(type === 'playmate' && {
-          playmatePreferredArea: playmatePreferredArea.trim() || undefined,
-          playmateSchedule: playmateSchedule.trim() || undefined,
-          playmatePreferredSize,
-          playmateEnergyLevel,
-          playmateVaccineRequired,
-        }),
       };
 
       const alert = await createAlert(data);
@@ -520,146 +487,6 @@ export default function CreateAlertScreen() {
         />
 
         {/* Adoption-specific fields */}
-        {type === 'adoption' && (
-          <View style={styles.extraSection}>
-            <Text style={styles.extraSectionTitle}>Adoption Details</Text>
-
-            <Input
-              label="Reason for rehoming (optional)"
-              placeholder="e.g. Moving abroad, can't bring along"
-              value={adoptionReason}
-              onChangeText={setAdoptionReason}
-              multiline
-              numberOfLines={2}
-              style={{ minHeight: 60, textAlignVertical: 'top' }}
-            />
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Adoption fee</Text>
-              <View style={styles.pillRow}>
-                {[{ label: 'Free', value: true }, { label: 'Paid', value: false }].map((opt) => (
-                  <TouchableOpacity
-                    key={String(opt.value)}
-                    style={[styles.pill, adoptionFeeIsFree === opt.value && styles.pillSelected]}
-                    onPress={() => setAdoptionFeeIsFree(opt.value)}
-                  >
-                    <Text style={[styles.pillText, adoptionFeeIsFree === opt.value && styles.pillTextSelected]}>
-                      {opt.label}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-              {!adoptionFeeIsFree && (
-                <Input
-                  placeholder="Amount in PHP (e.g. 500)"
-                  value={adoptionFee}
-                  onChangeText={setAdoptionFee}
-                  keyboardType="numeric"
-                />
-              )}
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Health status</Text>
-              <View style={styles.toggleRow}>
-                <TouchableOpacity
-                  style={[styles.toggleChip, isNeutered === true && styles.toggleChipOn]}
-                  onPress={() => setIsNeutered(isNeutered === true ? undefined : true)}
-                >
-                  {isNeutered === true && <Check size={12} color={Colors.textInverse} />}
-                  <Text style={[styles.toggleChipText, isNeutered === true && styles.toggleChipTextOn]}>
-                    Neutered
-                  </Text>
-                </TouchableOpacity>
-                <TouchableOpacity
-                  style={[styles.toggleChip, isVaccinated === true && styles.toggleChipOn]}
-                  onPress={() => setIsVaccinated(isVaccinated === true ? undefined : true)}
-                >
-                  {isVaccinated === true && <Check size={12} color={Colors.textInverse} />}
-                  <Text style={[styles.toggleChipText, isVaccinated === true && styles.toggleChipTextOn]}>
-                    Vaccinated
-                  </Text>
-                </TouchableOpacity>
-              </View>
-            </View>
-
-            <Input
-              label="Ideal owner note (optional)"
-              placeholder="e.g. Best for families, loves kids"
-              value={idealOwnerNote}
-              onChangeText={setIdealOwnerNote}
-              multiline
-              numberOfLines={2}
-              style={{ minHeight: 60, textAlignVertical: 'top' }}
-            />
-          </View>
-        )}
-
-        {/* Playmate-specific fields */}
-        {type === 'playmate' && (
-          <View style={styles.extraSection}>
-            <Text style={styles.extraSectionTitle}>Playdate Details</Text>
-
-            <Input
-              label="Preferred play area (optional)"
-              placeholder="e.g. IT Park, Lahug"
-              value={playmatePreferredArea}
-              onChangeText={setPlaymatePreferredArea}
-            />
-
-            <Input
-              label="Schedule (optional)"
-              placeholder="e.g. Weekend mornings"
-              value={playmateSchedule}
-              onChangeText={setPlaymateSchedule}
-            />
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Preferred size</Text>
-              <View style={styles.pillRow}>
-                {['small', 'medium', 'large', 'any'].map((s) => (
-                  <TouchableOpacity
-                    key={s}
-                    style={[styles.pill, playmatePreferredSize === s && styles.pillSelected]}
-                    onPress={() => setPlaymatePreferredSize(s)}
-                  >
-                    <Text style={[styles.pillText, playmatePreferredSize === s && styles.pillTextSelected]}>
-                      {s.charAt(0).toUpperCase() + s.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <View style={styles.fieldGroup}>
-              <Text style={styles.label}>Energy level</Text>
-              <View style={styles.pillRow}>
-                {['low', 'medium', 'high', 'any'].map((e) => (
-                  <TouchableOpacity
-                    key={e}
-                    style={[styles.pill, playmateEnergyLevel === e && styles.pillSelected]}
-                    onPress={() => setPlaymateEnergyLevel(e)}
-                  >
-                    <Text style={[styles.pillText, playmateEnergyLevel === e && styles.pillTextSelected]}>
-                      {e.charAt(0).toUpperCase() + e.slice(1)}
-                    </Text>
-                  </TouchableOpacity>
-                ))}
-              </View>
-            </View>
-
-            <TouchableOpacity
-              style={[styles.toggleChip, playmateVaccineRequired && styles.toggleChipOn]}
-              onPress={() => setPlaymateVaccineRequired((v) => !v)}
-            >
-              {playmateVaccineRequired && <Check size={12} color={Colors.success} />}
-              <Text style={[styles.toggleChipText, playmateVaccineRequired && styles.toggleChipTextOn]}>
-                Vaccine required
-              </Text>
-            </TouchableOpacity>
-          </View>
-        )}
-
         {/* Location */}
         <View style={styles.locationSection}>
           <Text style={styles.label}>Location *</Text>

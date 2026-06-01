@@ -11,28 +11,74 @@ import {
 } from 'react-native';
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { BellOff, Plus, Bell, Search, SlidersHorizontal, MapPin, Navigation } from 'lucide-react-native';
+import { Plus, Bell, BellOff, SlidersHorizontal, MapPin, Navigation } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { AlertCard } from '../../components/community/AlertCard';
+import { StoryFeedCard } from '../../components/community/StoryFeedCard';
+import { EventFeedCard } from '../../components/community/EventFeedCard';
 import { Tabs } from '../../components/ui/Tabs';
 import { EmptyState } from '../../components/ui/EmptyState';
 import { Loading } from '../../components/ui/Loading';
-import { PageBanner } from '../../components/ui';
+import { MatchStories } from '../../components/pawmatch/MatchStories';
+import { CreatePostSheet } from '../../components/community/CreatePostSheet';
 import { useCommunityStore } from '../../store/communityStore';
+import { usePetStore } from '../../store/petStore';
 import { useLocation } from '../../hooks/useLocation';
-import { Alert as AlertType, AlertType as AlertTypeEnum } from '../../types';
+import { Alert as AlertType, AlertType as AlertTypeEnum, FeedItem } from '../../types';
 
 const TABS = [
-  { key: 'all',      label: 'All'      },
-  { key: 'lost',     label: 'Lost'     },
-  { key: 'found',    label: 'Found'    },
-  { key: 'adoption', label: 'Adoption' },
-  { key: 'playmate', label: 'Playmate' },
+  { key: 'all',     label: 'All'     },
+  { key: 'lost',    label: 'Lost'    },
+  { key: 'found',   label: 'Found'   },
+  { key: 'diaries', label: 'Diaries' },
+  { key: 'events',  label: 'Events'  },
 ];
+
+type CommunityListItem =
+  | { kind: 'intro' }
+  | { kind: 'tabs' }
+  | { kind: 'empty' }
+  | { kind: 'alert'; alert: AlertType }
+  | { kind: 'story'; story: FeedItem['story'] }
+  | { kind: 'event'; event: FeedItem['event'] };
+
+function CommunityHeader({ router, showCreate, onCreatePress }: {
+  router: ReturnType<typeof useRouter>;
+  showCreate?: boolean;
+  onCreatePress?: () => void;
+}) {
+  return (
+    <View style={styles.header}>
+      <Text style={styles.headerTitle}>Community</Text>
+      <View style={styles.headerActions}>
+        <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/notifications')}>
+          <Bell size={20} color={Colors.textPrimary} />
+        </TouchableOpacity>
+        {showCreate && (
+          <TouchableOpacity style={styles.headerCreateBtn} onPress={onCreatePress ?? (() => router.push('/alert/create'))}>
+            <Plus size={18} color={Colors.surface} />
+          </TouchableOpacity>
+        )}
+      </View>
+    </View>
+  );
+}
 
 export default function CommunityScreen() {
   const router = useRouter();
-  const { alerts, fetchAlerts, isLoading, activeFilters } = useCommunityStore();
+  const { 
+    alerts, 
+    fetchAlerts, 
+    fetchMoreAlerts,
+    isLoading, 
+    isLoadingMore,
+    activeFilters, 
+    events, 
+    fetchEvents, 
+    diaryFeed, 
+    fetchDiaryFeed,
+    fetchMoreDiaryFeed,
+  } = useCommunityStore();
   const {
     coordinates,
     hasPermission,
@@ -42,35 +88,68 @@ export default function CommunityScreen() {
     requestPermission,
   } = useLocation();
 
-  const [activeTab, setActiveTab]   = useState('all');
-  const [refreshing, setRefreshing] = useState(false);
-  // Request location on mount
+  const { pets } = usePetStore();
+  const [activeTab, setActiveTab]     = useState('all');
+  const [refreshing, setRefreshing]   = useState(false);
+  const [showCreateSheet, setShowCreateSheet] = useState(false);
+
   useEffect(() => {
     getCurrentLocation();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
+  // Only alerts respect the type filter — other feed sources always fetch all
   const mergedFilters = useMemo(() => ({
     ...activeFilters,
-    type:      activeTab === 'all' ? undefined : activeTab as AlertTypeEnum,
+    type:      (activeTab === 'lost' || activeTab === 'found') ? activeTab as AlertTypeEnum : undefined,
     latitude:  coordinates?.latitude,
     longitude: coordinates?.longitude,
   }), [activeFilters, activeTab, coordinates]);
 
   const load = useCallback(() => {
-    fetchAlerts(mergedFilters);
-  }, [fetchAlerts, mergedFilters]);
+    if (coordinates) {
+      fetchAlerts(mergedFilters, 1, 20);
+      fetchDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25, 1, 20);
+      fetchEvents();
+    }
+  }, [fetchAlerts, fetchDiaryFeed, fetchEvents, mergedFilters, coordinates, activeFilters.radiusKm]);
 
-  // Only fetch alerts when we actually have coordinates
   useEffect(() => {
     if (coordinates) load();
   }, [load, coordinates]);
 
+  // Build and sort the unified feed
+  const unifiedFeed = useMemo((): FeedItem[] => {
+    const items: FeedItem[] = [
+      ...alerts.map((a) => ({ kind: 'alert' as const, sortDate: a.createdAt, alert: a })),
+      ...diaryFeed.map((d) => ({ kind: 'story' as const, sortDate: d.createdAt, story: d })),
+      ...events.map((e) => ({ kind: 'event' as const, sortDate: e.createdAt, event: e })),
+    ];
+    const filtered =
+      activeTab === 'all'     ? items :
+      activeTab === 'lost'    ? items.filter((i) => i.kind === 'alert' && i.alert?.type === 'lost') :
+      activeTab === 'found'   ? items.filter((i) => i.kind === 'alert' && i.alert?.type === 'found') :
+      activeTab === 'diaries' ? items.filter((i) => i.kind === 'story') :
+      items.filter((i) => i.kind === 'event');
+    return filtered.sort((a, b) => new Date(b.sortDate).getTime() - new Date(a.sortDate).getTime());
+  }, [alerts, diaryFeed, events, activeTab]);
+
   const handleRefresh = async () => {
     setRefreshing(true);
-    await getCurrentLocation();
-    await fetchAlerts(mergedFilters);
-    setRefreshing(false);
+    try {
+      // Only refresh data with existing coordinates - don't re-fetch location
+      // Location is already obtained on mount, no need to re-fetch on every refresh
+      if (coordinates) {
+        // Reset pagination to page 1 on refresh
+        await Promise.all([
+          fetchAlerts(mergedFilters, 1, 20),
+          fetchDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25, 1, 20),
+          fetchEvents(),
+        ]);
+      }
+    } finally {
+      setRefreshing(false);
+    }
   };
 
   const handleEnableLocation = async () => {
@@ -83,9 +162,23 @@ export default function CommunityScreen() {
     }
   };
 
+  const handleLoadMore = useCallback(() => {
+    if (activeTab === 'diaries') {
+      if (coordinates) fetchMoreDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25);
+    } else if (activeTab === 'events') {
+      // Events are loaded in full — no pagination
+    } else {
+      // 'all', 'lost', 'found': load more alerts
+      fetchMoreAlerts(mergedFilters);
+      // In 'all' tab also load more diaries so the merged feed stays balanced
+      if (activeTab === 'all' && coordinates) {
+        fetchMoreDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25);
+      }
+    }
+  }, [activeTab, coordinates, fetchMoreAlerts, fetchMoreDiaryFeed, mergedFilters, activeFilters.radiusKm]);
+
   const filterCount = useMemo(() => {
     let n = 0;
-    if (activeFilters.search?.trim())                          n++;
     if (activeFilters.species)                                 n++;
     if (activeFilters.breed?.trim())                           n++;
     if (activeFilters.dateRange && activeFilters.dateRange !== 'any') n++;
@@ -94,20 +187,112 @@ export default function CommunityScreen() {
     return n;
   }, [activeFilters]);
 
+  const listData = useMemo<CommunityListItem[]>(() => {
+    const feedRows: CommunityListItem[] = unifiedFeed.map((item) => {
+      if (item.kind === 'story') return { kind: 'story' as const, story: item.story };
+      if (item.kind === 'event') return { kind: 'event' as const, event: item.event };
+      return { kind: 'alert' as const, alert: item.alert! };
+    });
+    return [
+      { kind: 'intro' },
+      { kind: 'tabs' },
+      ...(feedRows.length > 0 ? feedRows : [{ kind: 'empty' as const }]),
+    ];
+  }, [unifiedFeed]);
+
+  const renderListFooter = () => {
+    if (!isLoadingMore) return null;
+    return (
+      <View style={styles.loadingFooter}>
+        <Loading />
+      </View>
+    );
+  };
+
+  const renderItem = useCallback(({ item }: { item: CommunityListItem }) => {
+    if (item.kind === 'intro') {
+      return (
+        <View>
+          <CommunityHeader router={router} showCreate onCreatePress={() => setShowCreateSheet(true)} />
+          <MatchStories />
+        </View>
+      );
+    }
+
+    if (item.kind === 'tabs') {
+      return (
+        <View style={styles.tabsContainer}>
+          <View style={styles.tabsPill}>
+            <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+          </View>
+          <TouchableOpacity
+            style={styles.filterBtn}
+            onPress={() => router.push('/community/filter')}
+          >
+            {filterCount > 0 && (
+              <View style={styles.filterBadge}>
+                <Text style={styles.filterBadgeText}>{filterCount}</Text>
+              </View>
+            )}
+            <SlidersHorizontal size={18} color={filterCount > 0 ? Colors.primary : Colors.textSecondary} />
+          </TouchableOpacity>
+        </View>
+      );
+    }
+
+    if (item.kind === 'empty') {
+      return (
+        <View style={styles.emptyWrap}>
+          <EmptyState
+            iconNode={<BellOff size={54} color={Colors.textSecondary} />}
+            title="Nothing here yet"
+            description="No posts found. Try a different tab or check back soon."
+            actionLabel="Report Alert"
+            onAction={() => router.push('/alert/create')}
+          />
+        </View>
+      );
+    }
+
+    if (item.kind === 'story' && item.story) {
+      return (
+        <View style={styles.alertItem}>
+          <StoryFeedCard
+            entry={item.story}
+            userLatitude={coordinates?.latitude}
+            userLongitude={coordinates?.longitude}
+          />
+        </View>
+      );
+    }
+
+    if (item.kind === 'event' && item.event) {
+      return (
+        <View style={styles.alertItem}>
+          <EventFeedCard event={item.event} />
+        </View>
+      );
+    }
+
+    return (
+      <View style={styles.alertItem}>
+        <AlertCard
+          alert={item.alert!}
+          userLatitude={coordinates?.latitude}
+          userLongitude={coordinates?.longitude}
+          onPress={() => router.push(`/alert/${item.alert!.id}`)}
+          onSightingsPress={() => router.push(`/alert/${item.alert!.id}?openModal=sightings`)}
+          onFormPress={() => router.push(`/alert/${item.alert!.id}?openModal=form`)}
+        />
+      </View>
+    );
+  }, [activeTab, filterCount, coordinates, router]);
+
   // ── Location permission gate ──────────────────────────────────────────────
   if (!locationLoading && !hasPermission && !coordinates) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <PageBanner
-          title="Community"
-          subtitle="Find and report lost or found pets in your neighborhood."
-          iconNode={<BellOff size={18} color={Colors.textInverse} />}
-          rightNode={
-            <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/notifications')}>
-              <Bell size={18} color={Colors.textInverse} />
-            </TouchableOpacity>
-          }
-        />
+        <CommunityHeader router={router} />
         <View style={styles.permissionContainer}>
           <View style={styles.permissionIconWrap}>
             <MapPin size={40} color={Colors.primary} />
@@ -129,11 +314,7 @@ export default function CommunityScreen() {
   if (locationLoading && !coordinates) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <PageBanner
-          title="Community"
-          subtitle="Find and report lost or found pets in your neighborhood."
-          iconNode={<BellOff size={18} color={Colors.textInverse} />}
-        />
+        <CommunityHeader router={router} />
         <View style={styles.permissionContainer}>
           <Loading />
           <Text style={styles.locationLoadingText}>Getting your location…</Text>
@@ -146,11 +327,7 @@ export default function CommunityScreen() {
   if (!coordinates && locationError) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
-        <PageBanner
-          title="Community"
-          subtitle="Find and report lost or found pets in your neighborhood."
-          iconNode={<BellOff size={18} color={Colors.textInverse} />}
-        />
+        <CommunityHeader router={router} />
         <View style={styles.permissionContainer}>
           <View style={styles.permissionIconWrap}>
             <Navigation size={40} color={Colors.error} />
@@ -173,95 +350,45 @@ export default function CommunityScreen() {
     return <Loading fullScreen />;
   }
 
-  return (
+return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      <PageBanner
-        title="Community"
-        subtitle="Find and report lost or found pets in your neighborhood."
-        helper={coordinates ? `Showing alerts within ${activeFilters.radiusKm ?? 10} km of you.` : undefined}
-        iconNode={<BellOff size={18} color={Colors.textInverse} />}
-        rightNode={
-          <View style={styles.headerButtons}>
-            <TouchableOpacity style={styles.headerBtn} onPress={() => router.push('/notifications')}>
-              <Bell size={18} color={Colors.textInverse} />
-            </TouchableOpacity>
-            <TouchableOpacity
-              style={[styles.headerBtn, { backgroundColor: Colors.textInverse }]}
-              onPress={() => router.push('/alert/create')}
-            >
-              <Plus size={18} color={Colors.primary} />
-            </TouchableOpacity>
-          </View>
-        }
-      />
-
-      {/* Search bar */}
-      <TouchableOpacity
-        style={styles.searchBar}
-        activeOpacity={0.7}
-        onPress={() => router.push('/community/filter')}
-      >
-        <Search size={16} color={Colors.textSecondary} />
-        <Text
-          style={[styles.searchBarText, activeFilters.search ? styles.searchBarTextFilled : null]}
-          numberOfLines={1}
-        >
-          {activeFilters.search?.trim() || 'Search alerts…'}
-        </Text>
-        <View style={styles.searchBarRight}>
-          {filterCount > 0 && (
-            <View style={styles.filterBadge}>
-              <Text style={styles.filterBadgeText}>{filterCount}</Text>
-            </View>
-          )}
-          <SlidersHorizontal size={16} color={filterCount > 0 ? Colors.primary : Colors.textSecondary} />
-        </View>
-      </TouchableOpacity>
-
-      {/* Type tabs */}
-      <View style={styles.tabsContainer}>
-        <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
-      </View>
-
       {/* Alert list */}
       <FlatList
-        data={alerts as AlertType[]}
-        keyExtractor={(item) => item.id}
+        data={listData}
+        keyExtractor={(item) => {
+          if (item.kind === 'alert') return 'alert-' + item.alert.id;
+          if (item.kind === 'story') return 'story-' + item.story?.id;
+          if (item.kind === 'event') return 'event-' + item.event?.id;
+          return item.kind;
+        }}
         contentContainerStyle={styles.list}
-        ItemSeparatorComponent={() => <View style={styles.alertGap} />}
+        stickyHeaderIndices={[1]}
         refreshControl={
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
         }
+        onEndReached={handleLoadMore}
+        onEndReachedThreshold={0.5}
+        ListFooterComponent={renderListFooter}
         contentInsetAdjustmentBehavior="never"
-        ListEmptyComponent={
-          <EmptyState
-            iconNode={<BellOff size={54} color={Colors.textSecondary} />}
-            title="No alerts in your area"
-            description={`No alerts found within ${activeFilters.radiusKm ?? 10} km. Try increasing the radius in filters.`}
-            actionLabel="Report Alert"
-            onAction={() => router.push('/alert/create')}
-          />
-        }
-        renderItem={({ item }) => (
-          <AlertCard
-            alert={item}
-            userLatitude={coordinates?.latitude}
-            userLongitude={coordinates?.longitude}
-            onPress={() => router.push(`/alert/${item.id}`)}
-            onSightingsPress={() => router.push(`/alert/${item.id}?openModal=sightings`)}
-            onFormPress={() => router.push(`/alert/${item.id}?openModal=form`)}
-          />
-        )}
+        removeClippedSubviews={true}
+        maxToRenderPerBatch={10}
+        updateCellsBatchingPeriod={50}
+        renderItem={renderItem}
       />
 
-      {/* FAB — create alert */}
+      {/* FAB — create post */}
       <Pressable
         style={({ pressed }) => [styles.fab, pressed && styles.fabPressed]}
-        onPress={() => router.push('/alert/create')}
+        onPress={() => setShowCreateSheet(true)}
       >
         <Plus size={24} color={Colors.textInverse} />
       </Pressable>
 
+      <CreatePostSheet
+        visible={showCreateSheet}
+        onClose={() => setShowCreateSheet(false)}
+        pets={pets}
+      />
     </SafeAreaView>
   );
 }
@@ -271,15 +398,40 @@ const styles = StyleSheet.create({
     flex: 1,
     backgroundColor: Colors.background,
   },
-  headerButtons: {
+  // ── Flat header ──
+  header: {
     flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    paddingHorizontal: 20,
+    paddingVertical: 14,
+    backgroundColor: Colors.surface,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  headerTitle: {
+    fontSize: 26,
+    fontWeight: '800',
+    color: Colors.textPrimary,
+  },
+  headerActions: {
+    flexDirection: 'row',
+    alignItems: 'center',
     gap: 8,
   },
-  headerBtn: {
-    width: 36,
-    height: 36,
-    borderRadius: 18,
-    backgroundColor: 'rgba(255,255,255,0.2)',
+  headerIconBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.neutral100,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  headerCreateBtn: {
+    width: 38,
+    height: 38,
+    borderRadius: 19,
+    backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },
@@ -332,62 +484,63 @@ const styles = StyleSheet.create({
     color: Colors.textSecondary,
     marginTop: 12,
   },
-  // ── Location error banner ──
-  // ── Search bar ──
-  searchBar: {
+  // ── Tabs + list ──
+  tabsContainer: {
+    paddingTop: 10,
+    paddingBottom: 12,
+    paddingHorizontal: 20,
+    backgroundColor: Colors.background,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 10,
-    marginHorizontal: 20,
-    marginTop: 12,
-    paddingHorizontal: 14,
-    paddingVertical: 11,
-    backgroundColor: Colors.surface,
-    borderRadius: 14,
-    borderWidth: 1.5,
-    borderColor: Colors.border,
   },
-  searchBarText: {
+  tabsPill: {
     flex: 1,
-    fontSize: 14,
-    color: Colors.textSecondary,
+    minHeight: 46,
+    backgroundColor: Colors.neutral100,
+    borderRadius: 12,
+    padding: 5,
+    justifyContent: 'center',
   },
-  searchBarTextFilled: {
-    color: Colors.textPrimary,
-    fontWeight: '500',
-  },
-  searchBarRight: {
-    flexDirection: 'row',
+  filterBtn: {
+    width: 36,
+    height: 36,
     alignItems: 'center',
-    gap: 6,
+    justifyContent: 'center',
+    marginLeft: 12,
+    position: 'relative',
   },
   filterBadge: {
-    minWidth: 18,
-    height: 18,
-    borderRadius: 9,
+    position: 'absolute',
+    top: 4,
+    right: 4,
+    minWidth: 14,
+    height: 14,
+    borderRadius: 7,
     backgroundColor: Colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 4,
+    paddingHorizontal: 3,
   },
   filterBadgeText: {
-    fontSize: 10,
+    fontSize: 9,
     fontWeight: '700',
     color: Colors.surface,
   },
-  // ── Tabs + list ──
-  tabsContainer: {
-    marginTop: 10,
-    marginBottom: 12,
-    marginHorizontal: 20,
-  },
   list: {
     paddingTop: 0,
-    paddingHorizontal: 20,
     paddingBottom: 100,
   },
-  alertGap: {
-    height: 12,
+  alertItem: {
+    paddingHorizontal: 20,
+    marginBottom: 12,
+  },
+  emptyWrap: {
+    paddingHorizontal: 20,
+  },
+  loadingFooter: {
+    paddingVertical: 20,
+    alignItems: 'center',
+    justifyContent: 'center',
   },
   fab: {
     position: 'absolute',

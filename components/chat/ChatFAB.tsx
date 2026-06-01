@@ -16,8 +16,9 @@ export function ChatFAB() {
     return () => clearInterval(interval);
   }, [fetchUnreadCount]);
 
-  // Hide on all chat screens
-  if (pathname.startsWith('/chat')) return null;
+  // Show only on the 4 main tabs — hide everywhere else
+  const ALLOWED = ['/', '/pets', '/services', '/me'];
+  if (!ALLOWED.includes(pathname)) return null;
 
   return (
     <TouchableOpacity

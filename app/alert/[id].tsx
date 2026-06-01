@@ -34,8 +34,6 @@ import { Colors } from '../../constants/colors';
 import { Badge } from '../../components/ui/Badge';
 import { Button } from '../../components/ui/Button';
 import { Loading } from '../../components/ui/Loading';
-import { AdoptionDetailsCard } from '../../components/community/AdoptionDetailsCard';
-import { PlaymateDetailsCard } from '../../components/community/PlaymateDetailsCard';
 import { useCommunityStore } from '../../store/communityStore';
 import { useChatStore } from '../../store/chatStore';
 import { useAuthStore } from '../../store/authStore';
@@ -55,12 +53,9 @@ export default function AlertDetailScreen() {
   const {
     selectedAlert,
     sightings,
-    interests,
     fetchAlert,
     fetchSightings,
-    fetchInterests,
     createSighting,
-    createInterest,
     resolveAlert,
     clearSelectedAlert,
     isLoading,
@@ -69,12 +64,10 @@ export default function AlertDetailScreen() {
   const [refreshing, setRefreshing]           = useState(false);
   const [showSightingForm, setShowSightingForm] = useState(false);
   const [showSightingsModal, setShowSightingsModal] = useState(false);
-  const [showInterestForm, setShowInterestForm] = useState(false);
-  const [showInterestsModal, setShowInterestsModal] = useState(false);
   const [sightingDescription, setSightingDescription] = useState('');
   const [sightingPhoto,       setSightingPhoto]       = useState('');
   const [isPhotoUploading,    setIsPhotoUploading]    = useState(false);
-  const [interestMessage, setInterestMessage]   = useState('');
+  const [isSubmittingSighting, setIsSubmittingSighting] = useState(false);
   const [galleryIndex, setGalleryIndex]         = useState(0);
 
   const openModalHandled = useRef(false);
@@ -83,8 +76,6 @@ export default function AlertDetailScreen() {
   const SHEET_HEIGHT = SCREEN_HEIGHT * 0.65;
   const slideAnim    = useRef(new Animated.Value(SHEET_HEIGHT)).current;
   const backdropAnim = useRef(new Animated.Value(0)).current;
-  const slideAnim2    = useRef(new Animated.Value(SHEET_HEIGHT)).current;
-  const backdropAnim2 = useRef(new Animated.Value(0)).current;
   const insets = useSafeAreaInsets();
 
   // ── Slide helpers ──────────────────────────────────────────────────────────
@@ -104,8 +95,6 @@ export default function AlertDetailScreen() {
 
   const openSightingsModal  = () => { setShowSightingsModal(true);  openSlide(slideAnim,  backdropAnim);  };
   const closeSightingsModal = () => closeSlide(slideAnim,  backdropAnim,  () => setShowSightingsModal(false));
-  const openInterestsModal  = () => { setShowInterestsModal(true);  openSlide(slideAnim2, backdropAnim2); };
-  const closeInterestsModal = () => closeSlide(slideAnim2, backdropAnim2, () => setShowInterestsModal(false));
 
   // ── Reset all modal state when the alert ID changes ───────────────────────
   // useLayoutEffect fires synchronously before paint, so no flash of stale
@@ -113,15 +102,12 @@ export default function AlertDetailScreen() {
   useLayoutEffect(() => {
     setShowSightingForm(false);
     setShowSightingsModal(false);
-    setShowInterestForm(false);
-    setShowInterestsModal(false);
     setSightingDescription('');
-    setInterestMessage('');
+    setSightingPhoto('');
+    setIsSubmittingSighting(false);
     setGalleryIndex(0);
     slideAnim.setValue(SHEET_HEIGHT);
     backdropAnim.setValue(0);
-    slideAnim2.setValue(SHEET_HEIGHT);
-    backdropAnim2.setValue(0);
     openModalHandled.current = false;
     clearSelectedAlert();
   // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -136,20 +122,10 @@ export default function AlertDetailScreen() {
   }, [id, fetchAlert, fetchSightings, getCurrentLocation]);
 
   useEffect(() => {
-    if (!id || !selectedAlert) return;
-    const isAdopt = selectedAlert.type === 'adoption' || selectedAlert.type === 'playmate';
-    if (isAdopt) fetchInterests(id);
-  }, [id, selectedAlert, fetchInterests]);
-
-  useEffect(() => {
     if (!openModal || !selectedAlert || openModalHandled.current) return;
     openModalHandled.current = true;
-    const isAdopt = selectedAlert.type === 'adoption' || selectedAlert.type === 'playmate';
-    if (openModal === 'sightings') {
-      isAdopt ? openInterestsModal() : openSightingsModal();
-    } else if (openModal === 'form') {
-      isAdopt ? setShowInterestForm(true) : setShowSightingForm(true);
-    }
+    if (openModal === 'sightings') openSightingsModal();
+    else if (openModal === 'form') setShowSightingForm(true);
   // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [openModal, selectedAlert]);
 
@@ -162,14 +138,18 @@ export default function AlertDetailScreen() {
   };
 
   const handleAddSighting = async () => {
-    if (!id || !sightingDescription.trim()) {
-      Alert.alert('Error', 'Please describe where you saw the pet.');
+    if (!id || !sightingDescription.trim() || isSubmittingSighting) {
+      if (!sightingDescription.trim()) {
+        Alert.alert('Error', 'Please describe where you saw the pet.');
+      }
       return;
     }
+    setIsSubmittingSighting(true);
     let coords = coordinates;
     if (!coords) coords = await getCurrentLocation();
     if (!coords) {
       Alert.alert('Error', 'Location required. Please enable location permissions.');
+      setIsSubmittingSighting(false);
       return;
     }
     try {
@@ -187,17 +167,8 @@ export default function AlertDetailScreen() {
       setShowSightingForm(false);
     } catch {
       Alert.alert('Error', 'Failed to submit sighting.');
-    }
-  };
-
-  const handleAddInterest = async () => {
-    if (!id) return;
-    try {
-      await createInterest(id, { message: interestMessage.trim() || undefined });
-      setInterestMessage('');
-      setShowInterestForm(false);
-    } catch {
-      Alert.alert('Error', 'Failed to submit interest.');
+    } finally {
+      setIsSubmittingSighting(false);
     }
   };
 
@@ -219,7 +190,6 @@ export default function AlertDetailScreen() {
     if (!id) return;
     try {
       const conv = await initiateConversation(id, recipientId);
-      closeInterestsModal();
       router.push(`/chat/${conv.id}`);
     } catch (err) {
       Alert.alert('Error', (err as { message?: string }).message ?? 'Could not start chat.');
@@ -234,13 +204,10 @@ export default function AlertDetailScreen() {
   const alertSightings = sightings[id ?? ''] ?? [];
   const isOwner = alert.userId === user?.id;
   const isResolved = alert.status === 'resolved';
-  const isAdoptionOrPlaymate = alert.type === 'adoption' || alert.type === 'playmate';
 
   const TYPE_BADGE: Record<string, { label: string; color: string }> = {
-    lost:     { label: 'LOST',     color: Colors.alertLost },
-    found:    { label: 'FOUND',    color: Colors.alertFound },
-    adoption: { label: 'ADOPTION', color: '#8B5CF6' },
-    playmate: { label: 'PLAYMATE', color: '#F59E0B' },
+    lost:  { label: 'LOST',  color: Colors.alertLost },
+    found: { label: 'FOUND', color: Colors.alertFound },
   };
   const typeBadge = TYPE_BADGE[alert.type] ?? TYPE_BADGE.lost;
   const heroHeight = HERO_BASE_HEIGHT + insets.top;
@@ -290,7 +257,7 @@ export default function AlertDetailScreen() {
                 </LinearGradient>
               ) : (
                 <Image
-                  key={`image-${index}`}
+                  key={`${imageUri}-${index}`}
                   source={{ uri: imageUri }}
                   style={[styles.heroImage, { width: SCREEN_WIDTH, height: heroHeight }]}
                   resizeMode="cover"
@@ -318,19 +285,19 @@ export default function AlertDetailScreen() {
             </TouchableOpacity>
             <View style={styles.headerActions}>
               <View style={styles.headerActionsColumn}>
-                {/* Plus — report sighting (lost/found) or express interest (adoption/playmate) */}
+                {/* Plus — report sighting */}
                 {!isResolved && !isOwner && (
                   <TouchableOpacity
                     style={styles.headerAction}
-                    onPress={() => isAdoptionOrPlaymate ? setShowInterestForm(true) : setShowSightingForm(true)}
+                    onPress={() => setShowSightingForm(true)}
                   >
                     <Plus size={16} color={Colors.primary} />
                   </TouchableOpacity>
                 )}
-                {/* Eye — view sightings (lost/found) or interests (adoption/playmate) */}
+                {/* Eye — view sightings */}
                 <TouchableOpacity
                   style={styles.headerAction}
-                  onPress={() => isAdoptionOrPlaymate ? openInterestsModal() : openSightingsModal()}
+                  onPress={() => openSightingsModal()}
                 >
                   <Eye size={16} color={Colors.primary} />
                 </TouchableOpacity>
@@ -392,13 +359,11 @@ export default function AlertDetailScreen() {
               </View>
             )}
             <View style={styles.statCard}>
-              <View style={[styles.statIconBox, { backgroundColor: isAdoptionOrPlaymate ? '#F5F3FF' : '#E0F2FE' }]}>
-                <Search size={16} color={isAdoptionOrPlaymate ? '#8B5CF6' : Colors.info} />
+              <View style={[styles.statIconBox, { backgroundColor: '#E0F2FE' }]}>
+                <Search size={16} color={Colors.info} />
               </View>
-              <Text style={styles.statCardLabel}>{isAdoptionOrPlaymate ? 'Interested' : 'Sightings'}</Text>
-              <Text style={styles.statCardValue}>
-                {isAdoptionOrPlaymate ? (alert.interestCount ?? 0) : alertSightings.length}
-              </Text>
+              <Text style={styles.statCardLabel}>Sightings</Text>
+              <Text style={styles.statCardValue}>{alertSightings.length}</Text>
             </View>
           </View>
 
@@ -465,31 +430,21 @@ export default function AlertDetailScreen() {
           </View>
         </View>
 
-        {/* Adoption / Playmate detail cards */}
-        {alert.type === 'adoption' && (
-          <View style={styles.extraSection}>
-            <AdoptionDetailsCard alert={alert} />
-          </View>
-        )}
-        {alert.type === 'playmate' && (
-          <View style={styles.extraSection}>
-            <PlaymateDetailsCard alert={alert} />
-          </View>
-        )}
-
       </ScrollView>
 
       {/* ── Sighting Form Modal (lost / found) ─────────────────────────── */}
       {showSightingForm && (
         <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSightingForm(false)} />
+          {!isSubmittingSighting && <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowSightingForm(false)} />}
           <View style={styles.modalContent}>
             <View style={styles.modalHandle} />
             <View style={styles.modalHeader}>
               <Text style={styles.modalTitle}>Report a Sighting</Text>
-              <TouchableOpacity onPress={() => setShowSightingForm(false)}>
-                <X size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
+              {!isSubmittingSighting && (
+                <TouchableOpacity onPress={() => setShowSightingForm(false)}>
+                  <X size={20} color={Colors.textSecondary} />
+                </TouchableOpacity>
+              )}
             </View>
             <Input
               placeholder="Where did you see the pet? Any distinguishing details..."
@@ -513,45 +468,8 @@ export default function AlertDetailScreen() {
               />
             </View>
             <View style={styles.sightingFormButtons}>
-              <Button title="Cancel"      variant="outline"  size="md" onPress={() => setShowSightingForm(false)} />
-              <Button title="Add Sighting" variant="primary" size="md" onPress={handleAddSighting} isLoading={isLoading} />
-            </View>
-          </View>
-        </View>
-      )}
-
-      {/* ── Interest Form Modal (adoption / playmate) ───────────────────── */}
-      {showInterestForm && (
-        <View style={styles.modalOverlay}>
-          <TouchableOpacity style={styles.modalBackdrop} activeOpacity={1} onPress={() => setShowInterestForm(false)} />
-          <View style={styles.modalContent}>
-            <View style={styles.modalHandle} />
-            <View style={styles.modalHeader}>
-              <Text style={styles.modalTitle}>
-                {alert.type === 'adoption' ? `Adopt ${alert.petName || 'This Pet'}` : `Request a Playdate`}
-              </Text>
-              <TouchableOpacity onPress={() => setShowInterestForm(false)}>
-                <X size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <Input
-              placeholder={
-                alert.type === 'adoption'
-                  ? 'Tell the owner why you\'d be a great home for this pet...'
-                  : 'Introduce your pet and suggest a meetup time/place...'
-              }
-              value={interestMessage}
-              onChangeText={setInterestMessage}
-              multiline
-              numberOfLines={4}
-              style={{ minHeight: 100, textAlignVertical: 'top', marginTop: 8 }}
-            />
-            <View style={styles.sightingFormButtons}>
-              <Button title="Cancel" variant="outline"  size="md" onPress={() => setShowInterestForm(false)} />
-              <Button
-                title={alert.type === 'adoption' ? 'Send Interest' : 'Request Playdate'}
-                variant="primary" size="md" onPress={handleAddInterest} isLoading={isLoading}
-              />
+              <Button title="Cancel" variant="outline" size="md" onPress={() => setShowSightingForm(false)} disabled={isSubmittingSighting} />
+              <Button title="Add Sighting" variant="primary" size="md" onPress={handleAddSighting} isLoading={isSubmittingSighting} />
             </View>
           </View>
         </View>
@@ -582,7 +500,7 @@ export default function AlertDetailScreen() {
                     </View>
                     <View style={styles.commentBubble}>
                       <Text style={styles.commentUsername}>{s.userName ?? 'Anonymous'}</Text>
-                      <Text style={styles.commentText}>{s.description}</Text>
+                      <Text style={styles.commentText} numberOfLines={0}>{s.description}</Text>
                       {s.photoUrl && (
                         <Image source={{ uri: s.photoUrl }} style={styles.commentPhoto} />
                       )}
@@ -598,65 +516,6 @@ export default function AlertDetailScreen() {
         </View>
       )}
 
-      {/* ── Interests Slide-in Modal (adoption / playmate) ──────────────── */}
-      {showInterestsModal && (
-        <View style={styles.slideModalOverlay}>
-          <Animated.View style={[styles.slideModalBackdrop, { opacity: backdropAnim2 }]} />
-          <Animated.View style={[styles.slideModalContent, { transform: [{ translateY: slideAnim2 }] }]}>
-            <View style={styles.sheetHandle} />
-            <View style={styles.slideModalHeader}>
-              <Text style={styles.slideModalTitle}>
-                {alert.type === 'adoption' ? 'Adoption Interests' : 'Playdate Requests'}
-                {' '}({isOwner ? (interests[id ?? ''] ?? []).length : (alert.interestCount ?? 0)})
-              </Text>
-              <TouchableOpacity onPress={closeInterestsModal}>
-                <X size={20} color={Colors.textSecondary} />
-              </TouchableOpacity>
-            </View>
-            <ScrollView style={styles.slideModalScroll}>
-              {(interests[id ?? ''] ?? []).length === 0 ? (
-                <Text style={styles.noSightings}>No comments yet. Be the first to express interest!</Text>
-              ) : (
-                (interests[id ?? ''] ?? []).map((interest) => (
-                  <View key={interest.id} style={styles.commentRow}>
-                    {/* Avatar */}
-                    {interest.userAvatarUrl ? (
-                      <Image source={{ uri: interest.userAvatarUrl }} style={styles.commentAvatar} />
-                    ) : (
-                      <View style={styles.commentAvatarPlaceholder}>
-                        <Text style={styles.commentAvatarInitial}>
-                          {(interest.userName ?? '?').charAt(0).toUpperCase()}
-                        </Text>
-                      </View>
-                    )}
-                    {/* Bubble + chat button */}
-                    <View style={styles.commentBubbleWrap}>
-                      <View style={styles.commentBubble}>
-                        <Text style={styles.commentUsername}>{interest.userName}</Text>
-                        <Text style={styles.commentText}>
-                          {interest.message?.trim() || '👋 Expressed interest'}
-                        </Text>
-                        <Text style={styles.commentTime}>
-                          {formatRelativeDate(new Date(interest.createdAt))}
-                        </Text>
-                      </View>
-                      {isOwner && (
-                        <TouchableOpacity
-                          style={styles.chatBtn}
-                          onPress={() => handleInitiateChat(interest.userId)}
-                        >
-                          <MessageCircle size={14} color={Colors.primary} />
-                          <Text style={styles.chatBtnText}>Chat</Text>
-                        </TouchableOpacity>
-                      )}
-                    </View>
-                  </View>
-                ))
-              )}
-            </ScrollView>
-          </Animated.View>
-        </View>
-      )}
     </View>
   );
 }
@@ -899,6 +758,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 8,
     gap: 3,
+    flex: 1,
   },
   chatBtn: {
     flexDirection: 'row',
@@ -926,6 +786,8 @@ const styles = StyleSheet.create({
     fontSize: 13,
     color: Colors.textPrimary,
     lineHeight: 18,
+    flex: 1,
+    flexWrap: 'wrap',
   },
   commentTime: {
     fontSize: 11,
@@ -1093,6 +955,7 @@ const styles = StyleSheet.create({
   slideModalScroll: {
     flex: 1,
     paddingTop: 4,
+    paddingHorizontal: 4,
   },
   heroPagination: {
     position: 'absolute',

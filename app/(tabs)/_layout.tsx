@@ -1,6 +1,7 @@
 import { Tabs } from 'expo-router';
 import { Redirect } from 'expo-router';
-import { BellRing, PawPrint, MapPinned, UserRound } from 'lucide-react-native';
+import { StyleSheet, View } from 'react-native';
+import { Home, PawPrint, Bone, MapPinned, UserRound } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { useAuthStore } from '../../store/authStore';
 
@@ -33,9 +34,10 @@ export default function TabsLayout() {
           shadowOffset: { width: 0, height: 4 },
           shadowOpacity: 0.12,
           shadowRadius: 12,
-          height: 64,
+          height: 68,
           paddingBottom: 10,
           paddingTop: 6,
+          overflow: 'visible',
         },
         tabBarLabelStyle: {
           fontSize: 12,
@@ -44,7 +46,8 @@ export default function TabsLayout() {
         },
         tabBarItemStyle: {
           borderRadius: 16,
-          marginHorizontal: 4,
+          marginHorizontal: 0,
+          overflow: 'visible',
         },
         headerShown: false,
         tabBarHideOnKeyboard: true,
@@ -57,8 +60,9 @@ export default function TabsLayout() {
         name="index"
         options={{
           title: 'Community',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, size, focused }) => (
-            <BellRing size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
+            <Home size={focused ? size + 8 : size + 4} color={focused ? Colors.primary : color} />
           ),
         }}
       />
@@ -66,8 +70,26 @@ export default function TabsLayout() {
         name="pets"
         options={{
           title: 'My Pets',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, size, focused }) => (
-            <PawPrint size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
+            <PawPrint size={focused ? size + 8 : size + 4} color={focused ? Colors.primary : color} />
+          ),
+        }}
+      />
+<Tabs.Screen
+        name="pawmatch"
+        options={{
+          title: 'PawMatch',
+          tabBarLabel: () => null,
+          tabBarItemStyle: styles.pawmatchTabItem,
+          tabBarIcon: ({ focused }) => (
+            <View style={[styles.pawmatchButton, focused && styles.pawmatchButtonFocused]}>
+              <Bone
+                size={40}
+                color={Colors.textInverse}
+                fill={focused ? Colors.textInverse : 'transparent'}
+              />
+            </View>
           ),
         }}
       />
@@ -75,8 +97,9 @@ export default function TabsLayout() {
         name="services"
         options={{
           title: 'Services',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, size, focused }) => (
-            <MapPinned size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
+            <MapPinned size={focused ? size + 8 : size + 4} color={focused ? Colors.primary : color} />
           ),
         }}
       />
@@ -84,11 +107,39 @@ export default function TabsLayout() {
         name="me"
         options={{
           title: 'Me',
+          tabBarLabel: () => null,
           tabBarIcon: ({ color, size, focused }) => (
-            <UserRound size={focused ? size + 4 : size} color={focused ? Colors.primary : color} />
+            <UserRound size={focused ? size + 8 : size + 4} color={focused ? Colors.primary : color} />
           ),
         }}
       />
     </Tabs>
   );
 }
+
+const styles = StyleSheet.create({
+  pawmatchTabItem: {
+    marginTop: -24,
+    overflow: 'visible',
+  },
+  pawmatchButton: {
+    width: 72,
+    height: 72,
+    borderRadius: 36,
+    backgroundColor: Colors.primary,
+    alignItems: 'center',
+    justifyContent: 'center',
+    borderWidth: 4,
+    borderColor: Colors.surface,
+    shadowColor: Colors.primary,
+    shadowOffset: { width: 0, height: 10 },
+    shadowOpacity: 0.36,
+    shadowRadius: 14,
+    elevation: 12,
+  },
+pawmatchButtonFocused: {
+    backgroundColor: Colors.secondary,
+    shadowColor: Colors.secondary,
+    transform: [{ scale: 1.12 }],
+  },
+});

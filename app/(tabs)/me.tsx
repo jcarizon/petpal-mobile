@@ -20,6 +20,7 @@ import { Colors } from '../../constants/colors';
 import { PetCard } from '../../components/pet/PetCard';
 import { Loading } from '../../components/ui/Loading';
 import { useAuthStore } from '../../store/authStore';
+import { isServiceProvider } from '../../types';
 import { usePetStore } from '../../store/petStore';
 import { useCommunityStore } from '../../store/communityStore';
 import { getGreeting } from '../../lib/utils';
@@ -30,7 +31,7 @@ export default function MeScreen() {
   const router = useRouter();
   const { user, logout } = useAuthStore();
   const { pets, fetchPets, healthScores, fetchHealthRecords, isLoading: petsLoading } = usePetStore();
-  const { alerts, fetchBadges, badges, leaderboard, fetchLeaderboard, fetchUserAlerts, isLoading: communityLoading } = useCommunityStore();
+  const { userAlerts, fetchBadges, badges, leaderboard, fetchLeaderboard, fetchUserAlerts, isLoading: communityLoading } = useCommunityStore();
   useLocation();
   const [refreshing, setRefreshing] = useState(false);
 
@@ -155,7 +156,7 @@ export default function MeScreen() {
             { label: 'Badges',    value: String(badges.length) },
             { label: 'City Rank', value: userLeaderboardEntry ? `#${userLeaderboardEntry.rank}` : '—' },
             { label: 'Pets',      value: String(pets.length) },
-            { label: 'Alerts',   value: String(alerts.length) },
+            { label: 'Alerts',   value: String(userAlerts.length) },
           ].map((s, i, arr) => (
             <React.Fragment key={s.label}>
               <View style={styles.statItem}>
@@ -278,9 +279,9 @@ export default function MeScreen() {
             </TouchableOpacity>
           </View>
 
-          {communityLoading && alerts.length === 0 ? (
+          {communityLoading && userAlerts.length === 0 ? (
             <Loading size="small" />
-          ) : alerts.length === 0 ? (
+          ) : userAlerts.length === 0 ? (
             <View style={styles.emptyCard}>
               <Bell size={32} color={Colors.neutral300} />
               <Text style={styles.emptyTitle}>No alerts yet</Text>
@@ -288,12 +289,12 @@ export default function MeScreen() {
             </View>
           ) : (
             <View style={styles.card}>
-              {alerts.map((item, i) => {
+              {userAlerts.map((item, i) => {
                 const cfg = TYPE_CONFIG[item.type] ?? TYPE_CONFIG.lost;
                 return (
                   <TouchableOpacity
                     key={item.id}
-                    style={[styles.alertRow, i < alerts.length - 1 && styles.alertRowBorder]}
+                    style={[styles.alertRow, i < userAlerts.length - 1 && styles.alertRowBorder]}
                     onPress={() => router.push(`/alert/${item.id}`)}
                     activeOpacity={0.75}
                   >
@@ -312,6 +313,27 @@ export default function MeScreen() {
             </View>
           )}
         </View>
+
+        {/* ── SERVICE PROVIDER ─────────────────────────────── */}
+        {isServiceProvider(user?.role) ? (
+          <TouchableOpacity style={styles.providerRow} onPress={() => router.push('/service/my-listings')} activeOpacity={0.75}>
+            <Text style={styles.providerRowEmoji}>🏪</Text>
+            <View style={styles.providerRowText}>
+              <Text style={styles.providerRowTitle}>My Business Listings</Text>
+              <Text style={styles.providerRowSub}>Manage your service listings & reviews</Text>
+            </View>
+            <ChevronRight size={18} color={Colors.neutral400} />
+          </TouchableOpacity>
+        ) : (
+          <TouchableOpacity style={styles.providerRow} onPress={() => router.push('/settings/become-provider')} activeOpacity={0.75}>
+            <Text style={styles.providerRowEmoji}>💼</Text>
+            <View style={styles.providerRowText}>
+              <Text style={styles.providerRowTitle}>Become a Service Provider</Text>
+              <Text style={styles.providerRowSub}>List your pet business on PetPal</Text>
+            </View>
+            <ChevronRight size={18} color={Colors.neutral400} />
+          </TouchableOpacity>
+        )}
 
         {/* ── SIGN OUT ─────────────────────────────────────── */}
         <TouchableOpacity
@@ -780,6 +802,11 @@ const styles = StyleSheet.create({
   },
 
   // Sign out
+  providerRow:      { flexDirection: 'row', alignItems: 'center', backgroundColor: Colors.surface, marginHorizontal: 16, marginTop: 20, marginBottom: 12, borderRadius: 14, padding: 14, gap: 12, borderWidth: 1, borderColor: Colors.border },
+  providerRowEmoji: { fontSize: 28 },
+  providerRowText:  { flex: 1 },
+  providerRowTitle: { fontSize: 14, fontWeight: '700', color: Colors.textPrimary },
+  providerRowSub:   { fontSize: 12, color: Colors.textSecondary, marginTop: 2 },
   signOutBtn: {
     flexDirection: 'row',
     alignItems: 'center',

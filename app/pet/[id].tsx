@@ -16,11 +16,13 @@ import {
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { LinearGradient } from 'expo-linear-gradient';
-import { Plus, AlertTriangle, ArrowLeft, ArrowRight, Check, Edit3, FileText, PawPrint, CalendarDays, Scale, Lightbulb, X, Activity, Stethoscope, Syringe, BookMarked, Bell, List, ImageIcon } from 'lucide-react-native';
+import { Plus, AlertTriangle, ArrowLeft, ArrowRight, Check, Edit3, FileText, PawPrint, CalendarDays, Scale, Lightbulb, X, Activity, Stethoscope, Syringe, BookMarked, Bell, List, ImageIcon, Heart, Home, Users, ChevronRight } from 'lucide-react-native';
 import { Colors } from '../../constants/colors';
 import { HealthScore } from '../../components/pet/HealthScore';
 import { Loading } from '../../components/ui/Loading';
 import { usePetStore } from '../../store/petStore';
+import { usePawMatchStore } from '../../store/pawmatchStore';
+import { MatchMode } from '../../types';
 import { calculateAge, formatDate, formatHealthRecordType, formatPetType } from '../../lib/utils';
 import { HealthRecordType, PetType, UpdatePetRequest } from '../../types';
 import { Input, DateTimeField, Badge } from '../../components/ui';
@@ -90,6 +92,9 @@ export default function PetDetailScreen() {
     addPetPhoto,
     isLoading,
   } = usePetStore();
+  const { profiles, fetchProfiles, deleteProfile } = usePawMatchStore();
+  const petProfiles = profiles[id ?? ''] ?? [];
+
   const [refreshing, setRefreshing] = React.useState(false);
   const [activeTab, setActiveTab] = useState('health');
   const [galleryIndex, setGalleryIndex] = useState(0);
@@ -151,17 +156,10 @@ export default function PetDetailScreen() {
       fetchHealthRecords(id);
       fetchDiaries(id);
       fetchReminders(id);
+      fetchProfiles(id);
     }
-  }, [id, fetchPet, fetchHealthRecords, fetchDiaries, fetchReminders, pets, selectedPet]);
+  }, [id, fetchPet, fetchHealthRecords, fetchDiaries, fetchReminders, fetchProfiles, pets, selectedPet]);
 
-  const petIndex = pets.findIndex((p) => p.id === id);
-  const petCount = pets.length;
-  const nextPet = petCount > 1 ? (pets[petIndex + 1] ?? pets[0]) : null;
-  const prevPet = petCount > 1 ? (petIndex > 0 ? pets[petIndex - 1] : pets[petCount - 1]) : null;
-
-  const handleNavigateToPet = (petId: string) => {
-    router.replace({ pathname: '/pet/[id]', params: { id: petId } });
-  };
 
   const handleRefresh = async () => {
     if (!id) return;
@@ -492,44 +490,6 @@ export default function PetDetailScreen() {
               />
             ))}
           </View>
-          {prevPet && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.petPaginationCardLeft,
-                pressed && styles.paginationCardPressed,
-              ]}
-              onPress={() => handleNavigateToPet(prevPet.id)}
-            >
-              {prevPet.photoUrl ? (
-                <Image source={{ uri: prevPet.photoUrl }} style={styles.petPaginationImage} />
-              ) : (
-                <View style={styles.petPaginationPlaceholder}>
-                  <Text style={styles.petPaginationEmoji}>
-                    {prevPet.type === 'dog' ? '🐕' : prevPet.type === 'cat' ? '🐈' : '🐾'}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          )}
-          {nextPet && (
-            <Pressable
-              style={({ pressed }) => [
-                styles.petPaginationCardRight,
-                pressed && styles.paginationCardPressed,
-              ]}
-              onPress={() => handleNavigateToPet(nextPet.id)}
-            >
-              {nextPet.photoUrl ? (
-                <Image source={{ uri: nextPet.photoUrl }} style={styles.petPaginationImage} />
-              ) : (
-                <View style={styles.petPaginationPlaceholder}>
-<Text style={styles.petPaginationEmoji}>
-                    {nextPet.type === 'dog' ? '🐕' : nextPet.type === 'cat' ? '🐈' : '🐾'}
-                  </Text>
-                </View>
-              )}
-            </Pressable>
-          )}
         </View>
         <View style={styles.infoCard}>
           <View style={styles.infoCardHeader}>
@@ -1119,12 +1079,91 @@ export default function PetDetailScreen() {
           </View>
         </View>
       )}
+
+      {/* ── PawMatch section ─────────────────────────────────────────── */}
+      {pet && !showAddOptionsModal && !showEditPetModal && !showDataSliderModal && !showSuggestionsModal && !showHealthScoreModal && (
+        <View style={styles.pawmatchSection}>
+          <View style={styles.pawmatchHeader}>
+            <Heart size={18} color={Colors.error} />
+            <Text style={styles.pawmatchTitle}>PawMatch</Text>
+          </View>
+          <Text style={styles.pawmatchSubtitle}>
+            Enable modes to let {pet.name} appear as a candidate for other users
+          </Text>
+
+          {PAW_MATCH_MODES.map(({ mode, label, icon, color, bg }, i) => {
+            const profile = petProfiles.find((p) => p.mode === mode && p.isActive);
+            const isLast = i === PAW_MATCH_MODES.length - 1;
+            return (
+              <TouchableOpacity
+                key={mode}
+                style={[styles.pawmatchRow, !isLast && styles.pawmatchRowDivider]}
+                activeOpacity={0.75}
+                onPress={() => router.push({ pathname: '/pawmatch/setup/[mode]', params: { mode, petId: id } })}
+              >
+                <View style={[styles.pawmatchModeIcon, { backgroundColor: bg }]}>{icon}</View>
+                <View style={styles.pawmatchModeInfo}>
+                  <Text style={styles.pawmatchModeLabel}>{label}</Text>
+                  <Text style={[styles.pawmatchModeStatus, { color: profile ? Colors.success : Colors.textDisabled }]}>
+                    {profile ? 'Active' : 'Not set up'}
+                  </Text>
+                </View>
+                {profile ? (
+                  <TouchableOpacity
+                    style={styles.pawmatchDeactivateBtn}
+                    onPress={() => deleteProfile(profile.id)}
+                    hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+                  >
+                    <X size={14} color={Colors.textDisabled} />
+                  </TouchableOpacity>
+                ) : (
+                  <ChevronRight size={18} color={Colors.neutral300} />
+                )}
+              </TouchableOpacity>
+            );
+          })}
+        </View>
+      )}
       </ScrollView>
     </View>
   );
 }
 
+const PAW_MATCH_MODES: { mode: MatchMode; label: string; icon: React.ReactNode; color: string; bg: string }[] = [
+  { mode: 'BREED',    label: 'Breed',    icon: <Heart size={16} color={Colors.error} />, color: Colors.error, bg: '#FFF1F2' },
+  { mode: 'ADOPT',    label: 'Adopt',    icon: <Home  size={16} color="#7C3AED" />, color: '#7C3AED', bg: '#F5F3FF' },
+  { mode: 'PLAYDATE', label: 'Playdate', icon: <Users size={16} color="#0891B2" />, color: '#0891B2', bg: '#E0F2FE' },
+];
+
 const styles = StyleSheet.create({
+  // PawMatch section
+  pawmatchSection: {
+    marginHorizontal: 16, marginBottom: 24,
+    backgroundColor: Colors.surface, borderRadius: 18,
+    elevation: 2, shadowColor: Colors.neutral900,
+    shadowOffset: { width: 0, height: 2 }, shadowOpacity: 0.07, shadowRadius: 8,
+    overflow: 'hidden',
+  },
+  pawmatchHeader: {
+    flexDirection: 'row', alignItems: 'center', gap: 8,
+    paddingHorizontal: 16, paddingTop: 16, paddingBottom: 4,
+  },
+  pawmatchTitle: { fontSize: 16, fontWeight: '800', color: Colors.textPrimary },
+  pawmatchSubtitle: {
+    fontSize: 13, color: Colors.textSecondary,
+    paddingHorizontal: 16, paddingBottom: 12,
+  },
+  pawmatchRow: {
+    flexDirection: 'row', alignItems: 'center',
+    paddingHorizontal: 16, paddingVertical: 13, gap: 12,
+  },
+  pawmatchRowDivider: { borderBottomWidth: 1, borderBottomColor: Colors.border },
+  pawmatchModeIcon: { width: 32, height: 32, borderRadius: 9, justifyContent: 'center', alignItems: 'center' },
+  pawmatchModeInfo: { flex: 1 },
+  pawmatchModeLabel: { fontSize: 15, fontWeight: '600', color: Colors.textPrimary },
+  pawmatchModeStatus: { fontSize: 12, marginTop: 1 },
+  pawmatchDeactivateBtn: { padding: 4 },
+
   container: {
     flex: 1,
     backgroundColor: Colors.background,
@@ -1234,65 +1273,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.textInverse,
     width: 10,
     height: 6,
-  },
-  petPaginationCardLeft: {
-    position: 'absolute',
-    left: 0,
-    top: height / 2 - 50,
-    width: 80,
-    height: 100,
-    borderRadius: 16,
-    overflow: 'hidden',
-    transform: [{ translateX: -50 }, { rotate: '10deg' }],
-    zIndex: 10,
-    opacity: 0.7,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  petPaginationCardRight: {
-    position: 'absolute',
-    right: 0,
-    top: height / 2 - 50,
-    width: 80,
-    height: 100,
-    borderRadius: 16,
-    overflow: 'hidden',
-    transform: [{ translateX: 50 }, { rotate: '-10deg' }],
-    zIndex: 10,
-    opacity: 0.7,
-    shadowColor: '#000000',
-    shadowOffset: { width: 0, height: 10 },
-    shadowOpacity: 0.6,
-    shadowRadius: 16,
-    elevation: 12,
-  },
-  petPaginationImage: {
-    width: '100%',
-    height: '100%',
-    resizeMode: 'cover',
-  },
-  petPaginationPlaceholder: {
-    width: '100%',
-    height: '100%',
-    backgroundColor: Colors.neutral800,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  petPaginationEmoji: {
-    fontSize: 32,
-  },
-  navigationLoader: {
-    ...StyleSheet.absoluteFillObject,
-    backgroundColor: 'rgba(255,255,255,0.8)',
-    zIndex: 100,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  paginationCardPressed: {
-    transform: [{ scale: 0.95 }],
   },
   heroInfoPanel: {
     position: 'absolute',
@@ -1781,10 +1761,12 @@ const styles = StyleSheet.create({
   modalOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'flex-end',
+    zIndex: 1000,
   },
   modalBackdrop: {
     ...StyleSheet.absoluteFillObject,
     backgroundColor: 'rgba(0,0,0,0.5)',
+    zIndex: 0,
   },
   modalContent: {
     backgroundColor: Colors.surface,
@@ -1793,6 +1775,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 34,
     maxHeight: '70%',
+    zIndex: 1,
+    elevation: 1,
   },
   editModalScroll: {
     maxHeight: height * 0.6,
@@ -2066,6 +2050,8 @@ const styles = StyleSheet.create({
     paddingHorizontal: 20,
     paddingBottom: 34,
     maxHeight: '80%',
+    zIndex: 1,
+    elevation: 1,
   },
   dataSliderTabs: {
     flexDirection: 'row',

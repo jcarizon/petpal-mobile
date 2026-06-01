@@ -49,16 +49,16 @@ export function Tabs({ tabs, activeTab, onTabChange, scrollable = false }: TabsP
 const styles = StyleSheet.create({
   container: {
     flexDirection: 'row',
-    backgroundColor: Colors.neutral100,
-    borderRadius: 12,
-    padding: 4,
+    flex: 1,
   },
   tab: {
     flex: 1,
+    minHeight: 36,
     paddingVertical: 8,
     paddingHorizontal: 12,
     borderRadius: 10,
     alignItems: 'center',
+    justifyContent: 'center',
   },
   activeTab: {
     backgroundColor: Colors.surface,
@@ -70,6 +70,7 @@ const styles = StyleSheet.create({
   },
   label: {
     fontSize: 13,
+    lineHeight: 18,
     fontWeight: '500',
     color: Colors.textSecondary,
   },
