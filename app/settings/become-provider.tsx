@@ -75,9 +75,9 @@ export default function BecomeProviderScreen() {
                 <View style={styles.heroIcon}>
                   <Store size={36} color={Colors.primary} />
                 </View>
-                <Text style={styles.heroTitle}>List Your Pet Business on PetPal</Text>
+                <Text style={styles.heroTitle}>List Your Pet Business on PawRok</Text>
                 <Text style={styles.heroSub}>
-                  Join hundreds of pet service providers already on PetPal. Reach local pet owners, collect reviews, and grow your business.
+                  Join hundreds of pet service providers already on PawRok. Reach local pet owners, collect reviews, and grow your business.
                 </Text>
               </View>
 
@@ -97,7 +97,7 @@ export default function BecomeProviderScreen() {
 
           <View style={styles.formSection}>
             <Text style={styles.formTitle}>Business Information</Text>
-            <Text style={styles.formSub}>This helps customers identify your business on PetPal.</Text>
+            <Text style={styles.formSub}>This helps customers identify your business on PawRok.</Text>
 
             <Input
               label="Business Name (optional)"
@@ -127,7 +127,7 @@ export default function BecomeProviderScreen() {
           />
 
           <Text style={styles.disclaimer}>
-            By continuing you agree to PetPal's service provider guidelines. All listings are reviewed before going live.
+            By continuing you agree to PawRok's service provider guidelines. All listings are reviewed before going live.
           </Text>
         </ScrollView>
       </KeyboardAvoidingView>

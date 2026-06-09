@@ -4,8 +4,8 @@ import { AuthTokens } from '../types';
 
 // ─── Secure Storage (tokens) ─────────────────────────────────────────────────
 
-const ACCESS_TOKEN_KEY = 'petpal_access_token';
-const REFRESH_TOKEN_KEY = 'petpal_refresh_token';
+const ACCESS_TOKEN_KEY = 'pawrok_access_token';
+const REFRESH_TOKEN_KEY = 'pawrok_refresh_token';
 
 export async function saveTokens(tokens: AuthTokens): Promise<void> {
   await SecureStore.setItemAsync(ACCESS_TOKEN_KEY, tokens.accessToken);
@@ -27,10 +27,10 @@ export async function clearTokens(): Promise<void> {
 
 // ─── AsyncStorage (general app data) ────────────────────────────────────────
 
-const ONBOARDING_KEY = 'petpal_onboarding_complete';
-const PUSH_TOKEN_KEY = 'petpal_push_token';
-const LOCATION_PERMISSION_KEY = 'petpal_location_permission';
-const NOTIFICATION_PERMISSION_KEY = 'petpal_notification_permission';
+const ONBOARDING_KEY = 'pawrok_onboarding_complete';
+const PUSH_TOKEN_KEY = 'pawrok_push_token';
+const LOCATION_PERMISSION_KEY = 'pawrok_location_permission';
+const NOTIFICATION_PERMISSION_KEY = 'pawrok_notification_permission';
 
 export async function setOnboardingComplete(): Promise<void> {
   await AsyncStorage.setItem(ONBOARDING_KEY, 'true');

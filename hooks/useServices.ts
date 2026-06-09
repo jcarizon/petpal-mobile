@@ -1,4 +1,5 @@
-import { useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useInfiniteQuery, useQuery, keepPreviousData } from '@tanstack/react-query';
+import { useMemo } from 'react';
 import api from '../lib/api';
 import { Service, ServiceFilters } from '../types';
 
@@ -111,10 +112,12 @@ const normalizeService = (service: BackendService): Service => ({
   updatedAt:         service.updatedAt,
 });
 
+const PAGE_SIZE = 20;
+
 export function useServices(filters?: ServiceFilters) {
-  const query = useQuery({
+  const query = useInfiniteQuery({
     queryKey: ['services', filters],
-    queryFn: async () => {
+    queryFn: async ({ pageParam }: { pageParam: number }) => {
       const params = new URLSearchParams();
       const backendType = toBackendType(filters?.type);
       if (backendType) params.append('type', backendType);
@@ -123,21 +126,38 @@ export function useServices(filters?: ServiceFilters) {
       if (filters?.longitude !== undefined) params.append('lng', String(filters.longitude));
       if (filters?.radiusKm !== undefined) params.append('radius', String(filters.radiusKm));
       if (filters?.query) params.append('q', filters.query);
+      params.append('page', String(pageParam));
+      params.append('limit', String(PAGE_SIZE));
 
       const q = params.toString();
       const response = await api.get<ApiWrapped<BackendService[]>>(`/services${q ? `?${q}` : ''}`);
       const rawServices = Array.isArray(response.data?.data) ? response.data.data : [];
-      return rawServices.map(normalizeService);
+      return {
+        services: rawServices.map(normalizeService),
+        page: pageParam,
+        hasMore: rawServices.length === PAGE_SIZE,
+      };
     },
-    placeholderData: keepPreviousData, // Keep showing old data while fetching new
+    initialPageParam: 1,
+    getNextPageParam: (lastPage) => lastPage.hasMore ? lastPage.page + 1 : undefined,
+    placeholderData: keepPreviousData,
+    enabled: filters !== undefined,
   });
 
+  const services = useMemo(
+    () => query.data?.pages?.flatMap((p) => p.services) ?? [],
+    [query.data],
+  );
+
   return {
-    services: query.data ?? [],
+    services,
     isLoading: query.isLoading,
     isFetching: query.isFetching,
+    isFetchingNextPage: query.isFetchingNextPage,
+    hasNextPage: !!query.hasNextPage,
+    fetchNextPage: query.fetchNextPage,
     error: query.error,
-    refetch: query.refetch,
+    refetch: () => query.refetch(),
   };
 }
 

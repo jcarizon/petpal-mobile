@@ -110,9 +110,9 @@ android {
     buildToolsVersion rootProject.ext.buildToolsVersion
     compileSdk rootProject.ext.compileSdkVersion
 
-    namespace "com.petpal.mobile"
+    namespace "com.pawrok.mobile"
     defaultConfig {
-        applicationId "com.petpal.mobile"
+        applicationId "com.pawrok.mobile"
         minSdkVersion rootProject.ext.minSdkVersion
         targetSdkVersion rootProject.ext.targetSdkVersion
         versionCode 1

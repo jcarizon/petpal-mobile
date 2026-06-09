@@ -78,7 +78,10 @@ export default function PawMatchHome() {
         <View style={styles.emptyState}>
           <PawPrint size={48} color={Colors.neutral400} />
           <Text style={styles.emptyTitle}>No pets yet</Text>
-          <Text style={styles.emptyText}>Add a pet to start matching</Text>
+          <Text style={styles.emptyText}>Browse adoptable pets or add your own pet for Breed and Playdate</Text>
+          <TouchableOpacity style={styles.addPetBtn} onPress={() => handleModePress('ADOPT')}>
+            <Text style={styles.addPetBtnText}>Browse Adoptions</Text>
+          </TouchableOpacity>
           <TouchableOpacity style={styles.addPetBtn} onPress={() => router.push('/pet/add')}>
             <Text style={styles.addPetBtnText}>Add a Pet</Text>
           </TouchableOpacity>
@@ -102,7 +105,7 @@ export default function PawMatchHome() {
         {MODES.map(({ mode, label, subtitle, icon, color, bg }) => {
           const active = activePetCount(mode);
           const matches = matchCount(mode);
-          const hasActive = active > 0;
+          const hasActive = mode === 'ADOPT' || active > 0;
 
           return (
             <TouchableOpacity
@@ -118,7 +121,9 @@ export default function PawMatchHome() {
                 <Text style={styles.modeSubtitle}>{subtitle}</Text>
                 <Text style={[styles.modeActive, { color: hasActive ? Colors.success : Colors.textDisabled }]}>
                   {hasActive
-                    ? `${active} pet${active !== 1 ? 's' : ''} active`
+                    ? mode === 'ADOPT'
+                      ? 'Open to everyone'
+                      : `${active} pet${active !== 1 ? 's' : ''} active`
                     : 'Set up from a pet\'s profile'}
                 </Text>
               </View>

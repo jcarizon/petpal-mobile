@@ -7,6 +7,7 @@ export default function ServiceLayout() {
       <Stack.Screen name="create" />
       <Stack.Screen name="my-listings" />
       <Stack.Screen name="[id]/edit" />
+      <Stack.Screen name="[id]/manage" />
     </Stack>
   );
 }

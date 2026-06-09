@@ -18,8 +18,9 @@ const CARD_H = SCREEN_H * 0.55;
 export default function SwipeScreen() {
   const { mode, petId: paramPetId } = useLocalSearchParams<{ mode: MatchMode; petId?: string }>();
   const router = useRouter();
-  const { candidates, fetchCandidates, swipe, profiles } = usePawMatchStore();
+  const { candidates, fetchCandidates, fetchAdoptionCandidates, swipe, requestAdoptionChat, profiles, removeTopCandidate } = usePawMatchStore();
   const { pets } = usePetStore();
+  const isAdoptMode = mode === 'ADOPT';
 
   // Pets that have an active profile for this mode
   const eligiblePets = pets.filter((pet) =>
@@ -32,6 +33,7 @@ export default function SwipeScreen() {
   const [pickerVisible, setPickerVisible] = useState(false);
   const [matchResult, setMatchResult] = useState<SwipeResult | null>(null);
   const [showMatch, setShowMatch] = useState(false);
+  const isSwiping = useRef(false);
 
   // When eligible pets load after profiles resolve, set first if none selected
   useEffect(() => {
@@ -59,8 +61,13 @@ export default function SwipeScreen() {
   const nopeOpacity = position.x.interpolate({ inputRange: [-SCREEN_W * 0.25, 0], outputRange: [1, 0], extrapolate: 'clamp' });
 
   useEffect(() => {
-    if (activePetId && mode) fetchCandidates(activePetId, mode);
-  }, [activePetId, mode]);
+    if (!mode) return;
+    if (isAdoptMode) {
+      fetchAdoptionCandidates();
+      return;
+    }
+    if (activePetId) fetchCandidates(activePetId, mode);
+  }, [activePetId, fetchAdoptionCandidates, fetchCandidates, isAdoptMode, mode]);
 
   // Swipe hint animation - pulse to indicate user can swipe
   useEffect(() => {
@@ -138,21 +145,51 @@ export default function SwipeScreen() {
 
   const completeSwipe = useCallback(
     (direction: 'LIKE' | 'PASS') => {
+      if (isSwiping.current) return;
+      isSwiping.current = true;
       Animated.timing(position, {
         toValue: { x: direction === 'LIKE' ? SCREEN_W * 1.5 : -SCREEN_W * 1.5, y: 20 },
         duration: 250,
         useNativeDriver: false,
       }).start(async () => {
         position.setValue({ x: 0, y: 0 });
-        if (!topCard || !callerProfile) return;
-        const result = await swipe(callerProfile.id, topCard.id, mode, direction);
-        if (result.matched) {
-          setMatchResult(result);
-          setShowMatch(true);
+        if (!topCard) {
+          isSwiping.current = false;
+          return;
+        }
+        if (isAdoptMode) {
+          try {
+            if (direction === 'LIKE') {
+              const result = await requestAdoptionChat(topCard.id);
+              setMatchResult({
+                matched: true,
+                matchId: result.matchId,
+                conversationId: result.conversationId,
+                petBName: result.petName,
+                modeLabel: 'Adoption',
+              });
+              setShowMatch(true);
+            } else {
+              removeTopCandidate('ADOPT');
+            }
+          } finally {
+            isSwiping.current = false;
+          }
+          return;
+        }
+        try {
+          if (!callerProfile) return;
+          const result = await swipe(callerProfile.id, topCard.id, mode, direction);
+          if (result.matched) {
+            setMatchResult(result);
+            setShowMatch(true);
+          }
+        } finally {
+          isSwiping.current = false;
         }
       });
     },
-    [position, topCard, callerProfile, mode, swipe]
+    [position, topCard, isAdoptMode, callerProfile, mode, requestAdoptionChat, removeTopCandidate, swipe]
   );
 
   const handlePanResponderMove = useCallback(
@@ -192,7 +229,7 @@ export default function SwipeScreen() {
   );
 
   // No active profile for this mode
-  if (eligiblePets.length === 0) {
+  if (!isAdoptMode && eligiblePets.length === 0) {
     return (
       <SafeAreaView style={styles.container} edges={['top']}>
         <View style={styles.topBar}>
@@ -223,6 +260,7 @@ export default function SwipeScreen() {
           mode={mode}
           activePet={activePet}
           eligiblePets={eligiblePets}
+          isAdoptMode={isAdoptMode}
           onBack={() => router.back()}
           onOpenPicker={() => setPickerVisible(true)}
         />
@@ -230,7 +268,7 @@ export default function SwipeScreen() {
           <Heart size={52} color={Colors.neutral300} />
           <Text style={styles.emptyTitle}>No more candidates nearby</Text>
           <Text style={styles.emptySub}>Check back later or expand your search radius in your profile settings</Text>
-          <TouchableOpacity style={styles.goBackBtn} onPress={() => fetchCandidates(activePetId!, mode)}>
+          <TouchableOpacity style={styles.goBackBtn} onPress={() => isAdoptMode ? fetchAdoptionCandidates() : fetchCandidates(activePetId!, mode)}>
             <Text style={styles.goBackBtnText}>Refresh</Text>
           </TouchableOpacity>
         </View>
@@ -245,8 +283,9 @@ export default function SwipeScreen() {
         mode={mode}
         activePet={activePet}
         eligiblePets={eligiblePets}
+        isAdoptMode={isAdoptMode}
         onBack={() => router.back()}
-        onOpenPicker={() => eligiblePets.length > 1 && setPickerVisible(true)}
+        onOpenPicker={() => !isAdoptMode && eligiblePets.length > 1 && setPickerVisible(true)}
       />
 
       <View style={styles.stack}>
@@ -337,33 +376,36 @@ export default function SwipeScreen() {
         onClose={() => setPickerVisible(false)}
       />
 
-      <Modal visible={showMatch} transparent animationType="fade">
-        <View style={styles.matchOverlay}>
-          <Text style={styles.matchTitle}>It's a Match!</Text>
-          <Text style={styles.matchSub}>
-            {matchResult?.petAName} and {matchResult?.petBName} connected 🐾
-          </Text>
-          <View style={styles.matchBtns}>
-            <TouchableOpacity
-              style={styles.msgBtn}
-              onPress={() => { setShowMatch(false); if (matchResult?.matchId) router.push({ pathname: '/pawmatch/[matchId]/chat', params: { matchId: matchResult.matchId } }); }}
-            >
-              <Text style={styles.msgBtnText}>Send a message</Text>
-            </TouchableOpacity>
-            <TouchableOpacity onPress={() => setShowMatch(false)}>
-              <Text style={styles.keepSwipingText}>Keep swiping</Text>
-            </TouchableOpacity>
-          </View>
-        </View>
-      </Modal>
+<Modal visible={showMatch} transparent animationType="fade">
+         <View style={styles.matchOverlay}>
+           <Text style={styles.matchTitle}>{isAdoptMode ? 'Request Sent' : 'It\'s a Match!'}</Text>
+           <Text style={styles.matchSub}>
+             {isAdoptMode
+               ? `${matchResult?.petBName ?? 'The owner'} will get your adoption chat request.`
+               : `${matchResult?.petAName} and ${matchResult?.petBName} connected`}
+           </Text>
+           <View style={styles.matchBtns}>
+             <TouchableOpacity
+               style={styles.msgBtn}
+               onPress={() => { setShowMatch(false); if (matchResult?.matchId) router.push({ pathname: '/pawmatch/[matchId]/chat', params: { matchId: matchResult.matchId } }); }}
+             >
+               <Text style={styles.msgBtnText}>{isAdoptMode ? 'View Request' : 'Send a message'}</Text>
+             </TouchableOpacity>
+             <TouchableOpacity onPress={() => setShowMatch(false)}>
+               <Text style={styles.keepSwipingText}>Keep swiping</Text>
+             </TouchableOpacity>
+           </View>
+         </View>
+       </Modal>
     </SafeAreaView>
   );
 }
 
 // ─── TopBar ───────────────────────────────────────────────────────────────────
 
-function TopBar({ mode, activePet, eligiblePets, onBack, onOpenPicker }: {
+function TopBar({ mode, activePet, eligiblePets, isAdoptMode = false, onBack, onOpenPicker }: {
   mode: MatchMode; activePet: Pet | null; eligiblePets: Pet[];
+  isAdoptMode?: boolean;
   onBack: () => void; onOpenPicker: () => void;
 }) {
   return (
@@ -372,15 +414,15 @@ function TopBar({ mode, activePet, eligiblePets, onBack, onOpenPicker }: {
         <ChevronLeft size={26} color={Colors.textPrimary} />
       </TouchableOpacity>
 
-      <TouchableOpacity style={styles.petSelector} onPress={onOpenPicker} disabled={eligiblePets.length <= 1}>
+      <TouchableOpacity style={styles.petSelector} onPress={onOpenPicker} disabled={isAdoptMode || eligiblePets.length <= 1}>
         {activePet?.avatarUrl
           ? <Image source={{ uri: activePet.avatarUrl }} style={styles.petSelectorAvatar} />
           : <View style={[styles.petSelectorAvatar, { backgroundColor: Colors.primaryBg, justifyContent: 'center', alignItems: 'center' }]}>
               <PawPrint size={14} color={Colors.primary} />
             </View>
         }
-        <Text style={styles.petSelectorName}>{activePet?.name ?? '—'}</Text>
-        {eligiblePets.length > 1 && <ChevronDown size={14} color={Colors.textSecondary} />}
+        <Text style={styles.petSelectorName}>{isAdoptMode ? 'Adoption' : activePet?.name ?? 'Browse'}</Text>
+        {!isAdoptMode && eligiblePets.length > 1 && <ChevronDown size={14} color={Colors.textSecondary} />}
       </TouchableOpacity>
 
       <Text style={styles.modeLabel}>{mode}</Text>
@@ -449,7 +491,7 @@ function CardContent({ profile }: { profile: PawMatchProfile }) {
         {profile.bio && <Text style={styles.cardBio}>{profile.bio}</Text>}
         <View style={styles.badgesRow}>
           {profile.isVaccinated && <Pill label="Vaccinated" color={Colors.success} />}
-          {profile.adoptionFee !== undefined && <Pill label={profile.adoptionFee === 0 ? 'Free' : `₱${profile.adoptionFee}`} color="#7C3AED" />}
+          {profile.adoptionFee != null && <Pill label={profile.adoptionFee === 0 ? 'Free' : `₱${profile.adoptionFee}`} color="#7C3AED" />}
           {profile.preferredSize && profile.preferredSize !== 'any' && <Pill label={profile.preferredSize} color={Colors.info} />}
           {profile.energyLevel && profile.energyLevel !== 'any' && <Pill label={profile.energyLevel + ' energy'} color={Colors.warning} />}
         </View>

@@ -1,6 +1,7 @@
 import { create } from 'zustand';
 import api from '../lib/api';
 import { useAuthStore } from './authStore';
+import { useRsvpStore } from './rsvpStore';
 import {
   Alert,
   Sighting,
@@ -55,6 +56,7 @@ const normalizeAlert = (a: ApiAlert): Alert => ({
   id: a.id,
   userId: a.userId,
   userName: a.user?.name ?? '',
+  userAvatarUrl: a.user?.avatarUrl,
   type: (a.type?.toLowerCase() ?? 'lost') as Alert['type'],
   status: (a.status?.toLowerCase() ?? 'active') as Alert['status'],
   title: a.title,
@@ -144,6 +146,7 @@ interface CommunityState {
   rsvpEvent: (eventId: string) => Promise<void>;
   fetchDiaryFeed: (lat: number, lng: number, radius?: number, page?: number, limit?: number) => Promise<void>;
   fetchMoreDiaryFeed: (lat: number, lng: number, radius?: number) => Promise<void>;
+  patchDiaryFeedEntry: (diaryId: string, patch: Partial<DiaryFeedEntry>) => void;
 
   fetchBadges: () => Promise<void>;
   fetchLeaderboard: (city?: string) => Promise<void>;
@@ -229,7 +232,8 @@ export const useCommunityStore = create<CommunityState>((set) => ({
 
   fetchMoreAlerts: async (filters?: AlertFilters) => {
     const state = useCommunityStore.getState();
-    if (!state.hasMoreAlerts || state.isLoadingMore) return;
+    const MAX_PAGES = 25; // 25 × 20 = 500 items cap
+    if (!state.hasMoreAlerts || state.isLoadingMore || state.alertsPage >= MAX_PAGES) return;
     await state.fetchAlerts(filters, state.alertsPage + 1, state.alertsLimit);
   },
 
@@ -412,10 +416,21 @@ export const useCommunityStore = create<CommunityState>((set) => ({
         imageUrl: e.imageUrl as string | undefined,
         maxRsvps: e.maxRsvps as number | undefined,
         rsvpCount: (e._count as Record<string, number> | undefined)?.rsvps ?? (e.rsvpCount as number) ?? 0,
+        hasRsvp: (e.hasRsvp as boolean | undefined) ?? false,
+        reactionCount: (e._count as Record<string, number> | undefined)?.reactions,
+        commentCount: (e._count as Record<string, number> | undefined)?.comments,
+        creatorId: (e.user as { id?: string } | null | undefined)?.id,
+        creatorName: (e.user as { name?: string } | null | undefined)?.name,
+        creatorAvatarUrl: (e.user as { avatarUrl?: string } | null | undefined)?.avatarUrl,
         createdAt: e.createdAt as string,
         updatedAt: e.updatedAt as string,
       }));
-      set({ events: mapped });
+      const rsvpedIds = useRsvpStore.getState().rsvpedIds;
+      set({
+        events: rsvpedIds.length
+          ? mapped.map((e) => rsvpedIds.includes(e.id) ? { ...e, hasRsvp: true } : e)
+          : mapped,
+      });
     } catch (err) {
       console.error('fetchEvents failed:', err);
     }
@@ -425,8 +440,14 @@ export const useCommunityStore = create<CommunityState>((set) => ({
     try {
       const offset = (page - 1) * limit;
       const res = await api.get(`/pets/diary/feed?lat=${lat}&lng=${lng}&radius=${radius}&limit=${limit}&offset=${offset}`);
-      const raw = unwrapApiData<DiaryFeedEntry[]>(res.data);
-      const items = Array.isArray(raw) ? raw : [];
+      const raw = unwrapApiData<Array<DiaryFeedEntry & { _count?: { reactions: number; comments: number } }>>(res.data);
+      const items: DiaryFeedEntry[] = Array.isArray(raw)
+        ? raw.map((d) => ({
+            ...d,
+            reactionCount: d._count?.reactions,
+            commentCount: d._count?.comments,
+          }))
+        : [];
       const hasMore = items.length === limit;
       
       set((state) => ({
@@ -444,9 +465,16 @@ export const useCommunityStore = create<CommunityState>((set) => ({
 
   fetchMoreDiaryFeed: async (lat: number, lng: number, radius = 25) => {
     const state = useCommunityStore.getState();
-    if (!state.hasMoreDiaryFeed || state.isLoadingMore) return;
+    const MAX_PAGES = 25;
+    if (!state.hasMoreDiaryFeed || state.isLoadingMore || state.diaryFeedPage >= MAX_PAGES) return;
     set({ isLoadingMore: true });
     await state.fetchDiaryFeed(lat, lng, radius, state.diaryFeedPage + 1, state.diaryFeedLimit);
+  },
+
+  patchDiaryFeedEntry: (diaryId, patch) => {
+    set((state) => ({
+      diaryFeed: state.diaryFeed.map((e) => e.id === diaryId ? { ...e, ...patch } : e),
+    }));
   },
 
   fetchEvent: async (id: string) => {
@@ -454,6 +482,7 @@ export const useCommunityStore = create<CommunityState>((set) => ({
     try {
       const response = await api.get(`/community/events/${id}`);
       const raw = unwrapApiData<Record<string, unknown>>(response.data);
+      const hasRsvp = (raw.hasRsvp as boolean) ?? false;
       const event: PetEvent = {
         id: raw.id as string,
         title: raw.title as string,
@@ -466,10 +495,20 @@ export const useCommunityStore = create<CommunityState>((set) => ({
         imageUrl: raw.imageUrl as string | undefined,
         maxRsvps: raw.maxRsvps as number | undefined,
         rsvpCount: (raw._count as Record<string, number> | undefined)?.rsvps ?? 0,
+        hasRsvp,
+        reactionCount: (raw._count as Record<string, number> | undefined)?.reactions,
+        commentCount: (raw._count as Record<string, number> | undefined)?.comments,
         createdAt: raw.createdAt as string,
         updatedAt: raw.updatedAt as string,
       };
-      set({ selectedEvent: event, isLoading: false });
+      // Sync server RSVP state into the persistent store so the feed card updates too
+      if (hasRsvp) useRsvpStore.getState().markRsvped(id);
+      set((state) => ({
+        selectedEvent: event,
+        // Also update the event in the feed list so the card reflects the correct state
+        events: state.events.map((e) => e.id === id ? { ...e, hasRsvp } : e),
+        isLoading: false,
+      }));
     } catch (err) {
       set({ error: (err as { message: string }).message ?? 'Failed to fetch event', isLoading: false });
     }
@@ -478,14 +517,21 @@ export const useCommunityStore = create<CommunityState>((set) => ({
   rsvpEvent: async (eventId: string) => {
     set({ isLoading: true, error: null });
     try {
-      await api.post(`/community/events/${eventId}/rsvp`);
+      const res = await api.post(`/community/events/${eventId}/rsvp`);
+      const alreadyRsvped = !!(res.data as { alreadyRsvped?: boolean })?.alreadyRsvped;
+      useRsvpStore.getState().markRsvped(eventId);
       set((state) => ({
         selectedEvent: state.selectedEvent?.id === eventId
-          ? { ...state.selectedEvent, rsvpCount: state.selectedEvent.rsvpCount + 1 }
+          ? {
+              ...state.selectedEvent,
+              hasRsvp: true,
+              rsvpCount: alreadyRsvped ? state.selectedEvent.rsvpCount : state.selectedEvent.rsvpCount + 1,
+            }
           : state.selectedEvent,
-        // Also update the events list so EventFeedCard reflects the new count immediately
         events: state.events.map((e) =>
-          e.id === eventId ? { ...e, rsvpCount: e.rsvpCount + 1 } : e
+          e.id === eventId
+            ? { ...e, hasRsvp: true, rsvpCount: alreadyRsvped ? e.rsvpCount : e.rsvpCount + 1 }
+            : e
         ),
         isLoading: false,
       }));

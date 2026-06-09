@@ -10,16 +10,24 @@ import {
   KeyboardAvoidingView,
   Platform,
   Image,
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
+import * as ImagePicker from 'expo-image-picker';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Camera, Edit3, ArrowLeft, Lock, BookOpen, Clock, Trash2 } from 'lucide-react-native';
+import { Edit3, ArrowLeft, Lock, BookOpen, Clock, Trash2, ImageIcon, Video, X } from 'lucide-react-native';
 import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
-import { ScreenHeader } from '../../../../components/ui';
+import { ImageUploader, ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
 import { useAuthStore } from '../../../../store/authStore';
+import { DiaryVideo } from '../../../../components/pet/DiaryVideo';
+import { uploadImage } from '../../../../lib/uploadImage';
+import { StoryVideoPreviewModal } from '../../../../components/diary/StoryVideoPreviewModal';
 import { DiaryMood, DiaryActivity, CreateDiaryRequest } from '../../../../types';
+
+const W = Dimensions.get('window').width;
 
 const moodOptions: { value: DiaryMood; label: string; emoji: string }[] = [
   { value: 'happy', label: 'Happy', emoji: '😊' },
@@ -62,12 +70,126 @@ export default function EditDiaryScreen() {
       });
     }
   }, [pet, user, isOwner]);
+  const { showToast } = useToast();
   const [isEditing, setIsEditing] = useState(false);
 
   const [title, setTitle] = useState('');
   const [content, setContent] = useState('');
   const [mood, setMood] = useState<DiaryMood | undefined>(undefined);
   const [activity, setActivity] = useState<DiaryActivity | undefined>(undefined);
+  const [editImageUrl, setEditImageUrl] = useState<string | undefined>();
+  const [editVideoUrl, setEditVideoUrl] = useState<string | undefined>();
+  const [editVideoName, setEditVideoName] = useState<string | undefined>();
+  const [editMediaType, setEditMediaType] = useState<'photo' | 'video'>('photo');
+  const [isUploading, setIsUploading] = useState(false);
+  const [pendingVideoUri, setPendingVideoUri] = useState<string | undefined>();
+  const [storyOrientation, setStoryOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  const confirmMediaReplace = (message: string, onConfirm: () => void) => {
+    Alert.alert('Replace Media', message, [
+      { text: 'Cancel', style: 'cancel' },
+      { text: 'Replace', style: 'destructive', onPress: onConfirm },
+    ]);
+  };
+
+  const isStoryMode = diary?.visibility === 'MATCHES_ONLY' || diary?.storyExpiresAt != null;
+
+  const handleChangeOrientation = (next: 'portrait' | 'landscape') => {
+    if (next === storyOrientation) return;
+    if (editImageUrl || editVideoUrl) {
+      Alert.alert(
+        'Change Orientation',
+        'Your media was cropped for the previous orientation and will be removed. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: () => {
+              setStoryOrientation(next);
+              setEditImageUrl(undefined);
+              setEditVideoUrl(undefined);
+              setEditVideoName(undefined);
+              setPendingVideoUri(undefined);
+            },
+          },
+        ]
+      );
+    } else {
+      setStoryOrientation(next);
+    }
+  };
+
+  const pickVideo = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission required', 'Allow access to your media library.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: false,
+      videoMaxDuration: 120,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    if (isStoryMode) {
+      setPendingVideoUri(asset.uri);
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const url = await uploadImage(asset.uri, { folder: 'diaries' });
+      setEditVideoUrl(url);
+      setEditVideoName(asset.fileName ?? 'video.mp4');
+    } catch {
+      showToast({ type: 'warning', title: 'Video upload failed', message: 'Changes will be saved without the video.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const pickPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') { Alert.alert('Permission required', 'Allow access to your media library.'); return; }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: isStoryMode,
+      aspect: isStoryMode ? (storyOrientation === 'landscape' ? [16, 9] : [9, 16]) : undefined,
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setIsUploading(true);
+    try {
+      const url = await uploadImage(result.assets[0].uri, { folder: 'diaries' });
+      setEditImageUrl(url);
+    } catch {
+      showToast({ type: 'warning', title: 'Photo upload failed', message: '' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handlePickEditVideo = () => {
+    if (editVideoUrl) {
+      confirmMediaReplace('This will replace the current video.', pickVideo);
+    } else {
+      pickVideo();
+    }
+  };
+
+  const handleConfirmVideoPreview = async () => {
+    if (!pendingVideoUri) return;
+    const uri = pendingVideoUri;
+    setPendingVideoUri(undefined);
+    setIsUploading(true);
+    try {
+      const url = await uploadImage(uri, { folder: 'diaries' });
+      setEditVideoUrl(url);
+      setEditVideoName('video.mp4');
+    } catch {
+      showToast({ type: 'warning', title: 'Video upload failed', message: 'Changes will be saved without the video.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   useEffect(() => {
     if (diary) {
@@ -75,6 +197,9 @@ export default function EditDiaryScreen() {
       setContent(diary.content);
       setMood(diary.mood);
       setActivity(diary.activity);
+      setStoryOrientation((diary.storyOrientation as 'portrait' | 'landscape') ?? 'portrait');
+      if (diary.videoUrl) { setEditVideoUrl(diary.videoUrl); setEditMediaType('video'); }
+      else { setEditImageUrl(diary.imageUrl); setEditMediaType('photo'); }
     }
   }, [diary]);
 
@@ -102,6 +227,9 @@ export default function EditDiaryScreen() {
         content: content.trim(),
         mood,
         activity,
+        imageUrl: editMediaType === 'photo' ? editImageUrl : undefined,
+        videoUrl: editMediaType === 'video' ? editVideoUrl : undefined,
+        ...(isStoryMode && { storyOrientation }),
       };
       await updateDiary(id!, diaryId!, diaryData);
       router.back();
@@ -172,6 +300,14 @@ export default function EditDiaryScreen() {
 
 return (
     <>
+      <StoryVideoPreviewModal
+        visible={!!pendingVideoUri}
+        uri={pendingVideoUri ?? ''}
+        orientation={storyOrientation}
+        onOrientationChange={setStoryOrientation}
+        onConfirm={handleConfirmVideoPreview}
+        onCancel={() => setPendingVideoUri(undefined)}
+      />
       {!isEditing ? (
         <SafeAreaView style={styles.viewContainer}>
           <View style={styles.viewHeader}>
@@ -184,8 +320,9 @@ return (
             </TouchableOpacity>
           </View>
           <ScrollView contentContainerStyle={styles.viewContent} showsVerticalScrollIndicator={false}>
-            {/* Diary photo */}
-            {diary?.imageUrl && (
+            {/* Diary media */}
+            {diary?.videoUrl && <DiaryVideo uri={diary.videoUrl} />}
+            {!diary?.videoUrl && diary?.imageUrl && (
               <Image source={{ uri: diary.imageUrl }} style={styles.diaryImage} resizeMode="cover" />
             )}
 
@@ -351,13 +488,131 @@ return (
               />
             </View>
 
-            {/* Photo Placeholder */}
+            {/* Media — Photo or Video */}
             <View style={styles.inputGroup}>
-              <Text style={styles.label}>Add Photo (Optional)</Text>
-              <TouchableOpacity style={styles.photoButton}>
-                <Camera size={24} color={Colors.primary} />
-                <Text style={styles.photoButtonText}>Change Photo</Text>
-              </TouchableOpacity>
+              <Text style={styles.label}>Media</Text>
+              <View style={styles.mediaToggleRow}>
+                <TouchableOpacity
+                  style={[styles.mediaToggleBtn, editMediaType === 'photo' && styles.mediaToggleBtnActive]}
+                  onPress={() => {
+                    if (editMediaType === 'video' && editVideoUrl) {
+                      confirmMediaReplace('Switch to photo? The current video will be removed.', () => {
+                        setEditMediaType('photo');
+                        setEditVideoUrl(undefined);
+                        setEditVideoName(undefined);
+                      });
+                    } else {
+                      setEditMediaType('photo');
+                      setEditVideoUrl(undefined);
+                      setEditVideoName(undefined);
+                    }
+                  }}
+                >
+                  <ImageIcon size={15} color={editMediaType === 'photo' ? Colors.primary : Colors.textSecondary} />
+                  <Text style={[styles.mediaToggleText, editMediaType === 'photo' && styles.mediaToggleTextActive]}>Photo</Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.mediaToggleBtn, editMediaType === 'video' && styles.mediaToggleBtnActive]}
+                  onPress={() => {
+                    if (editMediaType === 'photo' && editImageUrl) {
+                      confirmMediaReplace('Switch to video? The current photo will be removed.', () => {
+                        setEditMediaType('video');
+                        setEditImageUrl(undefined);
+                      });
+                    } else {
+                      setEditMediaType('video');
+                      setEditImageUrl(undefined);
+                    }
+                  }}
+                >
+                  <Video size={15} color={editMediaType === 'video' ? Colors.primary : Colors.textSecondary} />
+                  <Text style={[styles.mediaToggleText, editMediaType === 'video' && styles.mediaToggleTextActive]}>Video</Text>
+                </TouchableOpacity>
+              </View>
+
+              {/* Orientation toggle — only for story posts */}
+              {isStoryMode && (
+                <View style={styles.orientationRow}>
+                  <TouchableOpacity
+                    style={[styles.orientationBtn, storyOrientation === 'portrait' && styles.orientationBtnActive]}
+                    onPress={() => handleChangeOrientation('portrait')}
+                  >
+                    <Text style={[styles.orientationText, storyOrientation === 'portrait' && styles.orientationTextActive]}>
+                      Portrait (9:16)
+                    </Text>
+                  </TouchableOpacity>
+                  <TouchableOpacity
+                    style={[styles.orientationBtn, storyOrientation === 'landscape' && styles.orientationBtnActive]}
+                    onPress={() => handleChangeOrientation('landscape')}
+                  >
+                    <Text style={[styles.orientationText, storyOrientation === 'landscape' && styles.orientationTextActive]}>
+                      Landscape (16:9)
+                    </Text>
+                  </TouchableOpacity>
+                </View>
+              )}
+
+              {editMediaType === 'photo' ? (
+                editImageUrl ? (
+                  <View style={styles.photoPreviewWrap}>
+                    {isUploading ? (
+                      <View style={styles.videoUploading}>
+                        <ActivityIndicator color={Colors.primary} />
+                        <Text style={styles.videoUploadingText}>Uploading…</Text>
+                      </View>
+                    ) : (
+                      <Image source={{ uri: editImageUrl }} style={styles.photoPreview} resizeMode="cover" />
+                    )}
+                    <View style={styles.photoPreviewActions}>
+                      <TouchableOpacity
+                        style={styles.photoPreviewBtn}
+                        onPress={() => confirmMediaReplace('Replace the current photo with a new one?', pickPhoto)}
+                        disabled={isUploading}
+                      >
+                        <Text style={styles.photoPreviewBtnText}>Replace Photo</Text>
+                      </TouchableOpacity>
+                      <TouchableOpacity
+                        style={[styles.photoPreviewBtn, styles.photoPreviewBtnRemove]}
+                        onPress={() => setEditImageUrl(undefined)}
+                        disabled={isUploading}
+                      >
+                        <Text style={[styles.photoPreviewBtnText, styles.photoPreviewBtnTextRemove]}>Remove</Text>
+                      </TouchableOpacity>
+                    </View>
+                  </View>
+                ) : (
+                  <ImageUploader
+                    value={editImageUrl}
+                    onChange={setEditImageUrl}
+                    folder="diaries"
+                    shape="rect"
+                    width="100%"
+                    height={140}
+                    onUploadStart={() => setIsUploading(true)}
+                    onUploadEnd={(err) => {
+                      setIsUploading(false);
+                      if (err) showToast({ type: 'warning', title: 'Photo upload failed', message: '' });
+                    }}
+                  />
+                )
+              ) : isUploading ? (
+                <View style={styles.videoUploading}>
+                  <ActivityIndicator color={Colors.primary} />
+                  <Text style={styles.videoUploadingText}>Uploading…</Text>
+                </View>
+              ) : editVideoUrl ? (
+                <View style={styles.videoPreviewWrap}>
+                  <DiaryVideo uri={editVideoUrl} height={Math.round((W - 80) * 0.6)} />
+                  <TouchableOpacity style={styles.videoRemoveBtn} onPress={() => { setEditVideoUrl(undefined); setEditVideoName(undefined); }}>
+                    <X size={14} color="#fff" />
+                  </TouchableOpacity>
+                </View>
+              ) : (
+                <TouchableOpacity style={styles.photoButton} onPress={handlePickEditVideo}>
+                  <Video size={22} color={Colors.primary} />
+                  <Text style={styles.photoButtonText}>Pick a video</Text>
+                </TouchableOpacity>
+              )}
             </View>
 
             {/* Save Button */}
@@ -564,15 +819,32 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 12,
     padding: 16,
-    borderWidth: 1,
+    borderWidth: 1.5,
     borderColor: Colors.border,
     borderStyle: 'dashed',
   },
   photoButtonText: {
-    fontSize: 16,
+    fontSize: 15,
     color: Colors.primary,
-    fontWeight: '500',
+    fontWeight: '600',
   },
+  orientationRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  orientationBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
+    borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  orientationBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
+  orientationText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  orientationTextActive: { color: Colors.primary },
+  mediaToggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  mediaToggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 8, borderRadius: 10, backgroundColor: Colors.neutral100, borderWidth: 1.5, borderColor: 'transparent' },
+  mediaToggleBtnActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
+  mediaToggleText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  mediaToggleTextActive: { color: Colors.primary },
+  videoUploading: { height: 80, justifyContent: 'center', alignItems: 'center', gap: 8, backgroundColor: Colors.neutral100, borderRadius: 12 },
+  videoUploadingText: { fontSize: 13, color: Colors.textSecondary },
+  videoPreviewWrap: { borderRadius: 12, overflow: 'hidden', position: 'relative' },
+  videoRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 26, height: 26, borderRadius: 13, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   buttonContainer: {
     marginTop: 8,
   },
@@ -581,6 +853,13 @@ const styles = StyleSheet.create({
     marginBottom: 32,
   },
   diaryImage: { width: '100%', height: 220, borderRadius: 16, marginBottom: 12 },
+  photoPreviewWrap: { borderRadius: 12, overflow: 'hidden', borderWidth: 1, borderColor: Colors.border },
+  photoPreview: { width: '100%', height: 180 },
+  photoPreviewActions: { flexDirection: 'row', gap: 8, padding: 8, backgroundColor: Colors.neutral100 },
+  photoPreviewBtn: { flex: 1, alignItems: 'center', paddingVertical: 8, borderRadius: 8, backgroundColor: Colors.surface, borderWidth: 1, borderColor: Colors.border },
+  photoPreviewBtnRemove: { borderColor: Colors.error + '40' },
+  photoPreviewBtnText: { fontSize: 13, fontWeight: '600', color: Colors.primary },
+  photoPreviewBtnTextRemove: { color: Colors.error },
   visibilityBadge: { backgroundColor: Colors.primaryBg, borderRadius: 20, paddingHorizontal: 10, paddingVertical: 3 },
   visibilityBadgePrivate: { backgroundColor: Colors.neutral100 },
   visibilityBadgeText: { fontSize: 11, fontWeight: '700', color: Colors.primary },

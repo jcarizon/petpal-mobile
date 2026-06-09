@@ -65,7 +65,7 @@ export const Colors = {
   badgeRescueStar: '#EF4444',
   badgeVetRegular: '#10B981',
   badgeCommunityGuard: '#F59E0B',
-  badgePetPalElite: '#F97316',
+  badgePawRokElite: '#F97316',
 } as const;
 
 export type ColorKey = keyof typeof Colors;

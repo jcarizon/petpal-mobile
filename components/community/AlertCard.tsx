@@ -1,4 +1,4 @@
-import React, { useState, useRef } from 'react';
+import React, { useState } from 'react';
 import {
   View,
   Text,
@@ -12,13 +12,14 @@ import {
   NativeScrollEvent,
 } from 'react-native';
 import { Eye, MessageCircle, Send, MapPin } from 'lucide-react-native';
+import { UserAvatarBox } from '../ui/UserAvatarBox';
 import { Colors } from '../../constants/colors';
 import { Alert, AlertType } from '../../types';
 import { formatRelativeDate, calculateDistance, formatDistance } from '../../lib/utils';
 
 // ── Layout constants ──────────────────────────────────────────────────────────
-const CARD_WIDTH = Dimensions.get('window').width - 40; // 20px list padding each side
-const IMAGE_HEIGHT = Math.round(CARD_WIDTH * 1.05);     // slightly taller than square
+const CARD_WIDTH = Dimensions.get('window').width;
+const IMAGE_HEIGHT = Math.round(CARD_WIDTH * 0.85);
 
 // ── Type config (exported for reuse elsewhere) ────────────────────────────────
 export const TYPE_CONFIG: Record<AlertType, {
@@ -45,6 +46,7 @@ interface AlertCardProps {
 // ── Component ─────────────────────────────────────────────────────────────────
 function AlertCardComponent({ alert, userLatitude, userLongitude, onPress, onSightingsPress, onFormPress }: AlertCardProps) {
   const [expanded, setExpanded]       = useState(false);
+  const [isTruncated, setIsTruncated] = useState(false);
   const [activeSlide, setActiveSlide] = useState(0);
 
   const config = TYPE_CONFIG[alert.type] ?? TYPE_CONFIG.lost;
@@ -61,7 +63,7 @@ function AlertCardComponent({ alert, userLatitude, userLongitude, onPress, onSig
   const description = alert.description?.trim() ||
     (alert.petName ? `${alert.petName} is ${alert.type === 'found' ? 'found' : 'missing'}. Please help!` : `See alert details for more information.`);
 
-  const displayName = alert.userName || 'PetPal User';
+  const displayName = alert.userName || 'PawRok User';
   const subtitle    = [alert.petName, alert.petBreed].filter(Boolean).join(' · ') ||
                       (alert.petSpecies ? alert.petSpecies.charAt(0) + alert.petSpecies.slice(1).toLowerCase() : null) ||
                       alert.city;
@@ -69,7 +71,7 @@ function AlertCardComponent({ alert, userLatitude, userLongitude, onPress, onSig
   const handleShare = async () => {
     try {
       await Share.share({
-        message: `${config.emoji} ${config.label}: ${alert.title}\n${description}\n\nShared via PetPal`,
+        message: `${config.emoji} ${config.label}: ${alert.title}\n${description}\n\nShared via PawRok`,
       });
     } catch {}
   };
@@ -84,15 +86,23 @@ function AlertCardComponent({ alert, userLatitude, userLongitude, onPress, onSig
 
       {/* ── Header ──────────────────────────────────────────────── */}
       <TouchableOpacity style={styles.header} onPress={onPress} activeOpacity={0.8}>
-        <View style={[styles.avatar, { backgroundColor: config.bgColor }]}>
-          <Text style={styles.avatarEmoji}>{config.emoji}</Text>
-        </View>
+        <UserAvatarBox avatarUrl={alert.userAvatarUrl} name={displayName} size={40} />
 
         <View style={styles.headerMid}>
           <Text style={styles.username} numberOfLines={1}>{displayName}</Text>
           {subtitle ? (
             <Text style={styles.subtitle} numberOfLines={1}>{subtitle}</Text>
           ) : null}
+          {(distance !== null || alert.city) && (
+            <View style={styles.headerLocation}>
+              <MapPin size={10} color={Colors.neutral400} />
+              <Text style={styles.headerLocationText} numberOfLines={1}>
+                {distance !== null ? `${formatDistance(distance)} away` : ''}
+                {distance !== null && alert.city ? ' · ' : ''}
+                {alert.city}
+              </Text>
+            </View>
+          )}
         </View>
 
         <View style={styles.headerRight}>
@@ -149,56 +159,42 @@ function AlertCardComponent({ alert, userLatitude, userLongitude, onPress, onSig
         </TouchableOpacity>
       )}
 
+      {/* ── Description ─────────────────────────────────────────── */}
+      <View style={styles.descWrap}>
+        <Text
+          style={styles.descText}
+          numberOfLines={expanded ? undefined : 2}
+          onTextLayout={(e) => { if (!expanded) setIsTruncated(e.nativeEvent.lines.length >= 2); }}
+        >
+          <Text style={styles.descUsername}>{displayName} </Text>
+          {description}
+        </Text>
+        {!expanded && isTruncated ? (
+          <TouchableOpacity onPress={() => setExpanded(true)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+            <Text style={styles.moreText}>more</Text>
+          </TouchableOpacity>
+        ) : expanded ? (
+          <TouchableOpacity onPress={() => setExpanded(false)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
+            <Text style={styles.moreText}>less</Text>
+          </TouchableOpacity>
+        ) : null}
+      </View>
+
       {/* ── Actions row ─────────────────────────────────────────── */}
       <View style={styles.actions}>
         <View style={styles.actionsLeft}>
-          {/* Eye — sightings / interests */}
           <TouchableOpacity style={styles.actionBtn} onPress={onSightingsPress ?? onPress}>
             <Eye size={24} color={Colors.textPrimary} strokeWidth={1.8} />
             {count > 0 && <Text style={styles.actionCount}>{count}</Text>}
           </TouchableOpacity>
-
-          {/* Comment — opens form modal */}
           <TouchableOpacity style={styles.actionBtn} onPress={onFormPress ?? onPress}>
             <MessageCircle size={24} color={Colors.textPrimary} strokeWidth={1.8} />
           </TouchableOpacity>
         </View>
-
-        {/* Share */}
         <TouchableOpacity style={styles.actionBtn} onPress={handleShare}>
           <Send size={22} color={Colors.textPrimary} strokeWidth={1.8} />
         </TouchableOpacity>
       </View>
-
-      {/* ── Description ─────────────────────────────────────────── */}
-      <View style={styles.descWrap}>
-        {expanded ? (
-          <Text style={styles.descText}>
-            <Text style={styles.descUsername}>{displayName} </Text>
-            {description}
-          </Text>
-        ) : (
-          <Text style={styles.descText} numberOfLines={1}>
-            <Text style={styles.descUsername}>{displayName} </Text>
-            {description}
-          </Text>
-        )}
-        {!expanded && description.length > 60 && (
-          <TouchableOpacity onPress={() => setExpanded(true)} hitSlop={{ top: 4, bottom: 4, left: 4, right: 4 }}>
-            <Text style={styles.moreText}>more</Text>
-          </TouchableOpacity>
-        )}
-      </View>
-
-      {/* ── Distance + location ─────────────────────────────────── */}
-      {(distance !== null || alert.city) && (
-        <View style={styles.locationRow}>
-          <MapPin size={11} color={Colors.neutral400} />
-          <Text style={styles.locationText}>
-            {distance !== null ? `${formatDistance(distance)} away · ` : ''}{alert.city}
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -209,13 +205,9 @@ export const AlertCard = React.memo(AlertCardComponent);
 const styles = StyleSheet.create({
   card: {
     backgroundColor: Colors.surface,
-    borderRadius: 16,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
     overflow: 'hidden',
-    shadowColor: '#000',
-    shadowOffset: { width: 0, height: 2 },
-    shadowOpacity: 0.07,
-    shadowRadius: 8,
-    elevation: 3,
   },
 
   // Header
@@ -335,8 +327,8 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     alignItems: 'center',
     paddingHorizontal: 12,
-    paddingTop: 10,
-    paddingBottom: 4,
+    paddingTop: 6,
+    paddingBottom: 14,
   },
   actionsLeft: {
     flexDirection: 'row',
@@ -358,7 +350,8 @@ const styles = StyleSheet.create({
   // Description
   descWrap: {
     paddingHorizontal: 14,
-    paddingBottom: 2,
+    paddingTop: 10,
+    paddingBottom: 4,
     gap: 2,
   },
   descText: {
@@ -375,17 +368,16 @@ const styles = StyleSheet.create({
     fontWeight: '500',
   },
 
-  // Location
-  locationRow: {
+  // Header location
+  headerLocation: {
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 4,
-    paddingHorizontal: 14,
-    paddingBottom: 12,
-    paddingTop: 6,
+    gap: 3,
+    marginTop: 2,
   },
-  locationText: {
+  headerLocationText: {
     fontSize: 11,
     color: Colors.neutral400,
+    flex: 1,
   },
 });

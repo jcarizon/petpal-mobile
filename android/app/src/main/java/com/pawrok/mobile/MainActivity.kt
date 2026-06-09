@@ -1,4 +1,4 @@
-package com.petpal.mobile
+package com.pawrok.mobile
 
 import android.os.Build
 import android.os.Bundle

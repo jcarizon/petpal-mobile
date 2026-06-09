@@ -6,7 +6,7 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import * as ExpoNotifications from 'expo-notifications';
-import { ArrowLeft, Bell, MessageCircle, AlertTriangle, Heart, Clock, Shield } from 'lucide-react-native';
+import { ArrowLeft, Bell, MessageCircle, AlertTriangle, Heart, Clock, Shield, Star } from 'lucide-react-native';
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { Colors } from '../../constants/colors';
 import { useNotificationStore } from '../../store/notificationStore';
@@ -16,7 +16,7 @@ import { inferNotificationType } from '../../lib/notifications';
 import { NotificationLog } from '../../types';
 
 // ── Per-type toggle keys ──────────────────────────────────────────────────────
-const PREF_KEY = 'petpal_notif_prefs';
+const PREF_KEY = 'pawrok_notif_prefs';
 
 const NOTIF_TYPES = [
   { key: 'alerts',    icon: <AlertTriangle size={18} color="#EF4444" />, label: 'Lost & Found Alerts',  sub: 'Nearby lost/found pet reports'   },
@@ -24,22 +24,24 @@ const NOTIF_TYPES = [
   { key: 'adoption',  icon: <Heart         size={18} color="#8B5CF6" />, label: 'Adoption & Playmate',  sub: 'Adoption interest & playdate requests' },
   { key: 'chat',      icon: <MessageCircle size={18} color="#10B981" />, label: 'Chat Messages',        sub: 'Direct messages from other users' },
   { key: 'badges',    icon: <Shield        size={18} color="#F59E0B" />, label: 'Badges & Level Ups',   sub: 'XP awards and achievement unlocks' },
+  { key: 'review',    icon: <Star          size={18} color="#F59E0B" />, label: 'Service Reviews',      sub: 'New reviews on your service listings' },
 ] as const;
 
 type PrefKey = typeof NOTIF_TYPES[number]['key'];
 
 const DEFAULT_PREFS: Record<PrefKey, boolean> = {
-  alerts: true, reminders: true, adoption: true, chat: true, badges: true,
+  alerts: true, reminders: true, adoption: true, chat: true, badges: true, review: true,
 };
 
 function typeToKey(n: NotificationLog): PrefKey | null {
   const t = n.type ?? inferNotificationType(n.title, n.body);
   if (!t) return null;
-  if (t === 'alert' || t === 'sighting')                    return 'alerts';
-  if (t === 'reminder')                                      return 'reminders';
-  if (t === 'interest' || t === 'adoption')                  return 'adoption';
+  if (t === 'alert' || t === 'sighting')                              return 'alerts';
+  if (t === 'reminder')                                               return 'reminders';
+  if (t === 'interest')                                               return 'adoption';
   if (t === 'chat_request' || t === 'chat_message' || t === 'chat_accepted') return 'chat';
-  if (t === 'badge' || t === 'level_up')                     return 'badges';
+  if (t === 'badge' || t === 'level_up')                              return 'badges';
+  if (t === 'review' || t === 'service_verified')                     return 'review';
   return null;
 }
 

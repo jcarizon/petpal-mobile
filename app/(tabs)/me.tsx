@@ -329,7 +329,7 @@ export default function MeScreen() {
             <Text style={styles.providerRowEmoji}>💼</Text>
             <View style={styles.providerRowText}>
               <Text style={styles.providerRowTitle}>Become a Service Provider</Text>
-              <Text style={styles.providerRowSub}>List your pet business on PetPal</Text>
+              <Text style={styles.providerRowSub}>List your pet business on PawRok</Text>
             </View>
             <ChevronRight size={18} color={Colors.neutral400} />
           </TouchableOpacity>
@@ -374,7 +374,7 @@ const QUICK_ACTIONS = [
 
 const BADGE_ICONS: Record<string, string> = {
   vax_hero: '💉', grooming_pro: '✂️', rescue_star: '⭐',
-  vet_regular: '🏥', community_guard: '🛡️', petpal_elite: '👑',
+  vet_regular: '🏥', community_guard: '🛡️', pawrok_elite: '👑',
   rescue_angel: '🪼', adoption_hero: '🏆', social_pup: '🤝', playdate_champ: '🐾',
   FIRST_PET: '🐣', HEALTH_HERO: '💊', COMMUNITY_STAR: '🌟',
   FINDER_HERO: '🔍', REVIEW_MASTER: '✍️', LOYALTY_BADGE: '❤️',
@@ -384,7 +384,7 @@ const BADGE_ICONS: Record<string, string> = {
 const BADGE_COLORS: Record<string, string> = {
   vax_hero: Colors.badgeVaxHero, grooming_pro: Colors.badgeGroomingPro,
   rescue_star: Colors.badgeRescueStar, vet_regular: Colors.badgeVetRegular,
-  community_guard: Colors.badgeCommunityGuard, petpal_elite: Colors.badgePetPalElite,
+  community_guard: Colors.badgeCommunityGuard, pawrok_elite: Colors.badgePawRokElite,
   RESCUE_ANGEL: '#8B5CF6', ADOPTION_HERO: '#10B981', SOCIAL_PUP: '#F59E0B', PLAYDATE_CHAMP: '#EF4444',
 };
 

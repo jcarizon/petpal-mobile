@@ -1,7 +1,7 @@
 // All UI copy strings
 export const Strings = {
   // App
-  APP_NAME: 'PetPal',
+  APP_NAME: 'PawRok',
   APP_TAGLINE: 'Your pet\'s health companion',
 
   // Onboarding
@@ -17,7 +17,7 @@ export const Strings = {
 
   // Auth
   LOGIN_TITLE: 'Welcome back',
-  LOGIN_SUBTITLE: 'Sign in to your PetPal account',
+  LOGIN_SUBTITLE: 'Sign in to your PawRok account',
   LOGIN_EMAIL: 'Email address',
   LOGIN_PASSWORD: 'Password',
   LOGIN_FORGOT: 'Forgot password?',
@@ -26,7 +26,7 @@ export const Strings = {
   LOGIN_REGISTER_LINK: 'Sign up',
 
   REGISTER_TITLE: 'Create account',
-  REGISTER_SUBTITLE: 'Join the PetPal community',
+  REGISTER_SUBTITLE: 'Join the PawRok community',
   REGISTER_NAME: 'Full name',
   REGISTER_EMAIL: 'Email address',
   REGISTER_PHONE: 'Phone number',
@@ -113,7 +113,7 @@ export const Strings = {
   BADGE_RESCUE_STAR: 'Rescue Star',
   BADGE_VET_REGULAR: 'Vet Regular',
   BADGE_COMMUNITY_GUARD: 'Community Guard',
-  BADGE_PETPAL_ELITE: 'PetPal Elite',
+  BADGE_PAWROK_ELITE: 'PawRok Elite',
 
   // Common
   SAVE: 'Save',

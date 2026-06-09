@@ -353,7 +353,7 @@ export default function CreateServiceScreen() {
           </View>
 
           <View style={styles.notice}>
-            <Text style={styles.noticeText}>📋 Your listing will be reviewed by PetPal admin before going live. This usually takes 1–2 business days.</Text>
+            <Text style={styles.noticeText}>📋 Your listing will be reviewed by PawRok admin before going live. This usually takes 1–2 business days.</Text>
           </View>
 
           <Button title="Submit Listing" variant="primary" size="lg" fullWidth onPress={handleSubmit} isLoading={isSubmitting || isLogoUploading || uploadingIdx !== null} style={styles.submitBtn} />

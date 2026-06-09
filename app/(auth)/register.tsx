@@ -14,6 +14,7 @@ import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuthStore } from '../../store/authStore';
 import { CEBU_CITIES } from '../../constants/config';
+import { PawRokLogo } from '../../components/ui/PawRokLogo';
 
 export default function RegisterScreen() {
   const router = useRouter();
@@ -73,9 +74,9 @@ export default function RegisterScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>🐾</Text>
+          <PawRokLogo size={72} />
           <Text style={styles.title}>Create account</Text>
-          <Text style={styles.subtitle}>Join the PetPal community</Text>
+          <Text style={styles.subtitle}>Join the PawRok community</Text>
         </View>
 
         {/* Form */}
@@ -198,10 +199,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     gap: 8,
-  },
-  logo: {
-    fontSize: 48,
-    marginBottom: 4,
   },
   title: {
     fontSize: 26,

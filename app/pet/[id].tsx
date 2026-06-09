@@ -294,6 +294,14 @@ export default function PetDetailScreen() {
     setGalleryIndex(safeIndex);
   };
 
+  if (!pet) {
+    return (
+      <View style={[styles.container, { justifyContent: 'center', alignItems: 'center' }]}>
+        <Loading />
+      </View>
+    );
+  }
+
   const currentStepConfig = editSteps[currentEditStep];
   const isLastEditStep = currentEditStep === editSteps.length - 1;
 
@@ -318,7 +326,7 @@ export default function PetDetailScreen() {
     setShowAddOptionsModal(false);
     const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status !== 'granted') {
-      Alert.alert('Permission Required', 'Allow PetPal to access your photo library.');
+      Alert.alert('Permission Required', 'Allow PawRok to access your photo library.');
       return;
     }
     const result = await ImagePicker.launchImageLibraryAsync({

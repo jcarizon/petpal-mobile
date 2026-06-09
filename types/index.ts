@@ -63,6 +63,7 @@ export interface Pet {
   birthDate?: string;
   weight?: number;
   photoUrl?: string;
+  avatarUrl?: string;
   healthScore?: number;
   createdAt: string;
   updatedAt: string;
@@ -226,6 +227,7 @@ export interface Alert {
   id: string;
   userId: string;
   userName: string;
+  userAvatarUrl?: string;
   userPhone?: string;
   contactPhone?: string;
   petId?: string | number;
@@ -322,7 +324,7 @@ export type BadgeType =
   | 'rescue_star'
   | 'vet_regular'
   | 'community_guard'
-  | 'petpal_elite';
+  | 'pawrok_elite';
 
 export interface Badge {
   id: string;
@@ -360,6 +362,12 @@ export interface PetEvent {
   imageUrl?: string;
   maxRsvps?: number;
   rsvpCount: number;
+  hasRsvp?: boolean;
+  reactionCount?: number;
+  commentCount?: number;
+  creatorId?: string;
+  creatorName?: string;
+  creatorAvatarUrl?: string;
   createdAt: string;
   updatedAt: string;
 }
@@ -373,8 +381,39 @@ export interface DiaryFeedEntry extends PetDiary {
     avatarUrl?: string;
     species: string;
     breed?: string;
-    owner: { id: string; name: string; city?: string; latitude?: number; longitude?: number };
+    owner: { id: string; name: string; avatarUrl?: string; city?: string; latitude?: number; longitude?: number };
   };
+  reactionCount?: number;
+  commentCount?: number;
+  userReacted?: boolean;
+}
+
+export interface DiaryReactionState {
+  count: number;
+  reacted: boolean;
+}
+
+export interface EventReactionState {
+  count: number;
+  reacted: boolean;
+}
+
+export interface EventComment {
+  id: string;
+  eventId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  user: { id: string; name: string; avatarUrl?: string };
+}
+
+export interface DiaryComment {
+  id: string;
+  diaryId: string;
+  userId: string;
+  content: string;
+  createdAt: string;
+  user: { id: string; name: string; avatarUrl?: string };
 }
 
 export type FeedItemKind = 'alert' | 'story' | 'event';
@@ -524,9 +563,11 @@ export interface PetDiary {
   content: string;
   mood?: DiaryMood;
   imageUrl?: string;
+  videoUrl?: string;
   activity?: DiaryActivity;
   visibility: DiaryVisibility;
   storyExpiresAt?: string | null;
+  storyOrientation?: 'portrait' | 'landscape';
   createdAt: string;
   updatedAt: string;
 }
@@ -536,9 +577,11 @@ export interface CreateDiaryRequest {
   content: string;
   mood?: DiaryMood;
   imageUrl?: string;
+  videoUrl?: string;
   activity?: DiaryActivity;
   visibility?: DiaryVisibility;
   shareAsStory?: boolean;
+  storyOrientation?: 'portrait' | 'landscape';
 }
 
 // ─── PawMatch ────────────────────────────────────────────────────────────────
@@ -595,6 +638,16 @@ export interface SwipeResult {
   petBName?: string;
 }
 
+export interface AdoptionInterestResult {
+  requested: boolean;
+  profileId: string;
+  petId: string;
+  petName: string;
+  ownerId: string;
+  matchId?: string;
+  conversationId?: string;
+}
+
 export interface PawMatch {
   id: string;
   mode: MatchMode;
@@ -610,6 +663,7 @@ export interface PawMatch {
 export interface PawMatchConversation {
   id: string;
   matchId: string;
+  status: 'PENDING' | 'ACTIVE' | 'DECLINED';
   createdAt: string;
   messages: PawMatchMessage[];
 }
@@ -622,6 +676,30 @@ export interface PawMatchMessage {
   mediaUrl?: string;
   readAt?: string;
   createdAt: string;
+}
+
+// ─── Unified Chat ────────────────────────────────────────────────────────────
+
+export type ChatKind = 'community' | 'pawmatch';
+export type ChatBadge = 'LOST' | 'FOUND' | 'BREED' | 'ADOPT' | 'PLAYDATE';
+
+export interface UnifiedConversation {
+  /** conversationId for community, matchId for pawmatch */
+  id: string;
+  kind: ChatKind;
+  badge: ChatBadge;
+  status: 'PENDING' | 'ACTIVE' | 'DECLINED';
+  /** conversationId (for pawmatch messages endpoint) */
+  conversationId?: string;
+  otherPersonName: string;
+  otherPersonAvatarUrl?: string;
+  /** alert title OR "PetName · mode" */
+  subtitle: string;
+  lastMessage?: string;
+  lastMessageAt?: string;
+  unreadCount: number;
+  /** true = current user started this conversation */
+  isInitiator: boolean;
 }
 
 export interface CreatePawMatchProfileRequest {

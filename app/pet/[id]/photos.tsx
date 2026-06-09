@@ -44,7 +44,7 @@ export default function PetPhotosScreen() {
     const { status, canAskAgain } = await ImagePicker.requestMediaLibraryPermissionsAsync();
     if (status === 'granted') return true;
     if (!canAskAgain) {
-      Alert.alert('Permission Required', 'Enable photo library access in Settings > PetPal > Photos.');
+      Alert.alert('Permission Required', 'Enable photo library access in Settings > PawRok > Photos.');
     }
     return false;
   };

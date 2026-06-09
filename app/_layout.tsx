@@ -5,6 +5,7 @@ import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { StatusBar } from 'expo-status-bar';
 import { SafeAreaProvider } from 'react-native-safe-area-context';
 import { useAuthStore } from '../store/authStore';
+import { useRsvpStore } from '../store/rsvpStore';
 import { Colors } from '../constants/colors';
 import { ToastProvider } from '../components/ui';
 import { registerForPushNotifications } from '../lib/notifications';
@@ -25,6 +26,7 @@ function RootLayoutNav() {
   // Initial auto-login attempt on cold start
   useEffect(() => {
     autoLogin();
+    useRsvpStore.getState().init();
   }, [autoLogin]);
 
   // Re-sync push token every time the user becomes authenticated

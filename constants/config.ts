@@ -44,7 +44,7 @@ export const Config = {
 
   // Cloudinary
   CLOUDINARY_CLOUD_NAME: process.env.EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME ?? '',
-  CLOUDINARY_UPLOAD_PRESET: process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? 'petpal_uploads',
+  CLOUDINARY_UPLOAD_PRESET: process.env.EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET ?? 'pawrok_uploads',
 
   // Geofencing defaults (km)
   DEFAULT_RADIUS_KM: Number(process.env.EXPO_PUBLIC_DEFAULT_RADIUS_KM ?? 5),

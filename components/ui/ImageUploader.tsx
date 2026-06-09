@@ -65,8 +65,8 @@ export function ImageUploader({
 
     const result = await ImagePicker.launchImageLibraryAsync({
       mediaTypes: ImagePicker.MediaTypeOptions.Images,
-      allowsEditing: true,
-      aspect: shape === 'circle' ? [1, 1] : [4, 3],
+      allowsEditing: shape === 'circle', // circle avatars are square-cropped; rect preserves natural orientation
+      aspect: shape === 'circle' ? [1, 1] : undefined,
       quality: 0.85,
     });
 

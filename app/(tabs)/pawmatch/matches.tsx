@@ -76,7 +76,9 @@ export default function MatchesScreen() {
         </View>
         <View style={styles.matchRight}>
           <View style={[styles.modePill, { backgroundColor: getModeColor(item.mode) + '20' }]}>
-            <Text style={[styles.modePillText, { color: getModeColor(item.mode) }]}>{item.mode}</Text>
+            <Text style={[styles.modePillText, { color: getModeColor(item.mode) }]}>
+              {item.mode === 'ADOPT' ? 'Adoption' : item.mode === 'BREED' ? 'Breeding' : 'Playdate'}
+            </Text>
           </View>
           <MessageCircle size={18} color={Colors.neutral400} style={{ marginTop: 6 }} />
         </View>

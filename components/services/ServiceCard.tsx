@@ -1,10 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet, TouchableOpacity, Linking, Animated } from 'react-native';
-import { Navigation, Phone } from 'lucide-react-native';
+import { Navigation, Phone, Bookmark, CheckCircle } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
 import { Colors } from '../../constants/colors';
 import { Service } from '../../types';
 import { formatServiceType, formatDistance, calculateDistance } from '../../lib/utils';
-import { Badge } from '../ui/Badge';
 import { LinearGradient } from 'expo-linear-gradient';
 
 interface ServiceCardProps {
@@ -13,6 +13,8 @@ interface ServiceCardProps {
   userLongitude?: number;
   onPress: () => void;
   onDirections?: () => void;
+  isSaved?: boolean;
+  onSave?: () => void;
 }
 
 const SERVICE_ICONS: Record<string, string> = {
@@ -24,7 +26,7 @@ const SERVICE_ICONS: Record<string, string> = {
   other: '📍',
 };
 
-export function ServiceCard({ service, userLatitude, userLongitude, onPress, onDirections }: ServiceCardProps) {
+export function ServiceCard({ service, userLatitude, userLongitude, onPress, onDirections, isSaved, onSave }: ServiceCardProps) {
   const distance =
     userLatitude !== undefined && userLongitude !== undefined
       ? calculateDistance(userLatitude, userLongitude, service.latitude, service.longitude)
@@ -92,7 +94,23 @@ export function ServiceCard({ service, userLatitude, userLongitude, onPress, onD
               {service.name}
             </Text>
             {service.isVerified && (
-              <Badge label="Verified" variant="default" size="sm" />
+              <CheckCircle size={16} color={Colors.secondary} />
+            )}
+            {onSave && (
+              <TouchableOpacity
+                style={styles.bookmarkBtn}
+                onPress={() => {
+                  void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+                  onSave();
+                }}
+                hitSlop={{ top: 8, bottom: 8, left: 8, right: 8 }}
+              >
+                <Bookmark
+                  size={18}
+                  color={isSaved ? Colors.secondary : Colors.neutral400}
+                  fill={isSaved ? Colors.secondary : 'none'}
+                />
+              </TouchableOpacity>
             )}
           </View>
 
@@ -170,7 +188,6 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.surface,
     borderRadius: 20,
     padding: 16,
-    paddingTop: 22,
     marginBottom: 12,
     shadowColor: Colors.neutral900,
     shadowOffset: { width: 0, height: 6 },
@@ -185,6 +202,9 @@ const styles = StyleSheet.create({
     left: 0,
     right: 0,
     height: 6,
+  },
+  bookmarkBtn: {
+    padding: 4,
   },
   iconContainer: {
     width: 52,

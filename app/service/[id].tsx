@@ -8,8 +8,10 @@ import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ArrowLeft, Building2, Clock, MapPin, Phone, Plus,
   Mail, Globe, Facebook, Instagram, CheckCircle, Star,
-  Tag, Award,
+  Tag, Award, Bookmark,
 } from 'lucide-react-native';
+import * as Haptics from 'expo-haptics';
+import { useSavedServicesStore } from '../../store/savedServicesStore';
 import { Colors } from '../../constants/colors';
 import { Card } from '../../components/ui/Card';
 import { Badge } from '../../components/ui/Badge';
@@ -63,6 +65,7 @@ export default function ServiceDetailScreen() {
   const [comment,         setComment]        = useState('');
   const [photoIndex,      setPhotoIndex]     = useState(0);
   const { showToast } = useToast();
+  const savedStore = useSavedServicesStore();
 
   const reviewsQuery = useQuery({
     queryKey: ['reviews', id],
@@ -100,20 +103,40 @@ export default function ServiceDetailScreen() {
   const openStatus = isOpenNow(service.openingHours);
   const isOwner    = user?.id === service.ownerId;
   const canEdit    = isOwner || isServiceProvider(user?.role);
+  const isSaved    = savedStore.isSaved(service.id);
+
+  const handleToggleSave = () => {
+    void Haptics.impactAsync(Haptics.ImpactFeedbackStyle.Light).catch(() => undefined);
+    savedStore.toggleSave(service);
+    showToast({
+      type: 'success',
+      title: isSaved ? 'Removed from saved' : 'Service saved!',
+      message: isSaved ? 'Removed from your saved list.' : 'Find it in Services → Saved tab.',
+    });
+  };
 
   return (
     <SafeAreaView style={styles.container} edges={['top']}>
-      {/* Back + edit header */}
+      {/* Back + bookmark + edit header */}
       <View style={styles.navBar}>
         <TouchableOpacity style={styles.navBtn} onPress={() => router.back()}>
           <ArrowLeft size={20} color={Colors.textPrimary} />
         </TouchableOpacity>
         <Text style={styles.navTitle} numberOfLines={1}>{service.name}</Text>
-        {canEdit && isOwner ? (
-          <TouchableOpacity style={styles.navBtn} onPress={() => router.push(`/service/${id}/edit`)}>
-            <Text style={styles.editText}>Edit</Text>
+        <View style={styles.navRight}>
+          <TouchableOpacity style={styles.navBtn} onPress={handleToggleSave}>
+            <Bookmark
+              size={18}
+              color={isSaved ? Colors.secondary : Colors.textSecondary}
+              fill={isSaved ? Colors.secondary : 'none'}
+            />
           </TouchableOpacity>
-        ) : <View style={{ width: 52 }} />}
+          {canEdit && isOwner ? (
+            <TouchableOpacity style={styles.navBtn} onPress={() => router.push(`/service/${id}/edit`)}>
+              <Text style={styles.editText}>Edit</Text>
+            </TouchableOpacity>
+          ) : null}
+        </View>
       </View>
 
       <ScrollView showsVerticalScrollIndicator={false} refreshControl={<RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />}>
@@ -288,7 +311,7 @@ export default function ServiceDetailScreen() {
               </View>
               <View style={styles.ownerInfo}>
                 <Text style={styles.ownerName}>{service.ownerName}</Text>
-                <Text style={styles.ownerSub}>Service Provider · PetPal member</Text>
+                <Text style={styles.ownerSub}>Service Provider · PawRok member</Text>
               </View>
             </Card>
           </View>
@@ -343,6 +366,7 @@ const styles = StyleSheet.create({
   navBar:             { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', paddingHorizontal: 12, paddingVertical: 10, backgroundColor: Colors.surface, borderBottomWidth: StyleSheet.hairlineWidth, borderBottomColor: Colors.border },
   navBtn:             { width: 36, height: 36, borderRadius: 18, backgroundColor: Colors.neutral100, alignItems: 'center', justifyContent: 'center' },
   navTitle:           { flex: 1, fontSize: 16, fontWeight: '700', color: Colors.textPrimary, textAlign: 'center', marginHorizontal: 8 },
+  navRight:           { flexDirection: 'row', alignItems: 'center', gap: 6 },
   editText:           { fontSize: 14, fontWeight: '700', color: Colors.primary, paddingHorizontal: 8 },
   carouselWrap:       { position: 'relative' },
   carouselPhoto:      { width: SCREEN_WIDTH, height: SCREEN_WIDTH * 0.65 },

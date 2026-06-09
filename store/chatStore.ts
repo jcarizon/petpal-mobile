@@ -27,6 +27,7 @@ interface ChatState {
   declineConversation: (conversationId: string) => Promise<void>;
   markRead: (conversationId: string) => Promise<void>;
   clearError: () => void;
+  reset: () => void;
 }
 
 const BASE = '/community/chat/conversations';
@@ -163,4 +164,5 @@ export const useChatStore = create<ChatState>((set, get) => ({
   },
 
   clearError: () => set({ error: null }),
+  reset: () => set({ conversations: [], messages: {}, isLoading: false, isSending: false, unreadTotal: 0, error: null }),
 }));

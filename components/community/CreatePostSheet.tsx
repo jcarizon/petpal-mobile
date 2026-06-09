@@ -42,7 +42,7 @@ const OPTIONS = [
   {
     id: 'post',
     emoji: '📝',
-    label: 'Public Pet Post',
+    label: 'Public Diary Post',
     subtitle: 'Share an update to the community feed',
     color: Colors.primary,
     bg: Colors.primaryBg,

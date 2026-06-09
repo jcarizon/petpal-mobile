@@ -1,7 +1,7 @@
 {
   "expo": {
-    "name": "PetPal",
-    "slug": "petpal",
+    "name": "PawRok",
+    "slug": "pawrok",
     "version": "1.0.0",
     "orientation": "portrait",
     "userInterfaceStyle": "light",
@@ -10,32 +10,31 @@
     ],
     "ios": {
       "supportsTablet": true,
-      "bundleIdentifier": "com.petpal.mobile",
+      "bundleIdentifier": "com.pawrok.mobile",
       "config": {
         "googleMapsApiKey": "AIzaSyC9TsMrG93WfhiU8aSAeFquHrAl-XfTqbI"
       },
       "infoPlist": {
-        "NSLocationWhenInUseUsageDescription": "PetPal needs your location to show nearby services and lost & found alerts.",
-        "NSLocationAlwaysUsageDescription": "PetPal needs your location for radius-based alerts.",
-        "NSCameraUsageDescription": "PetPal needs camera access to upload pet photos.",
-        "NSPhotoLibraryUsageDescription": "PetPal needs photo library access to upload pet photos."
+        "NSLocationWhenInUseUsageDescription": "PawRok needs your location to show nearby services and lost & found alerts.",
+        "NSLocationAlwaysUsageDescription": "PawRok needs your location for radius-based alerts.",
+        "NSCameraUsageDescription": "PawRok needs camera access to upload pet photos.",
+        "NSPhotoLibraryUsageDescription": "PawRok needs photo library access to upload pet photos."
       }
     },
     "android": {
-      "package": "com.petpal.mobile",
+      "package": "com.pawrok.mobile",
       "googleServicesFile": "./google-services.json",
       "permissions": [
-        "ACCESS_FINE_LOCATION",
-        "ACCESS_COARSE_LOCATION",
-        "CAMERA",
-        "READ_EXTERNAL_STORAGE",
-        "WRITE_EXTERNAL_STORAGE",
-        "RECEIVE_BOOT_COMPLETED",
-        "VIBRATE",
-        "android.permission.ACCESS_COARSE_LOCATION",
         "android.permission.ACCESS_FINE_LOCATION",
+        "android.permission.ACCESS_COARSE_LOCATION",
+        "android.permission.CAMERA",
+        "android.permission.READ_EXTERNAL_STORAGE",
+        "android.permission.WRITE_EXTERNAL_STORAGE",
+        "android.permission.RECEIVE_BOOT_COMPLETED",
+        "android.permission.VIBRATE",
         "android.permission.READ_MEDIA_IMAGES",
-        "android.permission.READ_MEDIA_VIDEO"
+        "android.permission.READ_MEDIA_VIDEO",
+        "android.permission.RECORD_AUDIO"
       ],
       "config": {
         "googleMaps": {
@@ -52,8 +51,8 @@
       [
         "expo-image-picker",
         {
-          "photosPermission": "Allow PetPal to access your photos to attach images and videos to messages.",
-          "cameraPermission": "Allow PetPal to use the camera to take photos for messages."
+          "photosPermission": "Allow PawRok to access your photos to attach images and videos to messages.",
+          "cameraPermission": "Allow PawRok to use the camera to take photos for messages."
         }
       ],
       [
@@ -66,19 +65,19 @@
       [
         "expo-location",
         {
-          "locationAlwaysAndWhenInUsePermission": "Allow PetPal to use your location."
+          "locationAlwaysAndWhenInUsePermission": "Allow PawRok to use your location."
         }
       ]
     ],
-    "scheme": "petpal",
+    "scheme": "pawrok",
+    "owner": "jmcarizons-organization",
     "extra": {
-      "eas": {
-        "projectId": "c231d251-ff3c-4e8b-93e6-a6c761eee376"
-      },
       "router": {
         "origin": false
+      },
+      "eas": {
+        "projectId": "308b30fa-5739-4961-9dca-8c37feddd5e8"
       }
-    },
-    "owner": "jmcarizons-organization"
+    }
   }
 }

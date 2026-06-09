@@ -13,6 +13,7 @@ import {
   CreateDiaryRequest,
 } from '../types';
 import { calculateHealthScore } from '../lib/utils';
+import { useCommunityStore } from './communityStore';
 
 const unwrapApiData = <T>(payload: unknown): T => {
   const maybeWrapped = payload as { data?: unknown };
@@ -443,6 +444,15 @@ export const usePetStore = create<PetState>((set, get) => ({
         },
         isLoading: false,
       }));
+      useCommunityStore.getState().patchDiaryFeedEntry(diaryId, {
+        title: updated.title,
+        content: updated.content,
+        mood: updated.mood,
+        activity: updated.activity,
+        imageUrl: updated.imageUrl,
+        videoUrl: updated.videoUrl,
+        storyOrientation: updated.storyOrientation,
+      });
     } catch (err) {
       const message = (err as { message: string }).message ?? 'Failed to update diary';
       set({ error: message, isLoading: false });

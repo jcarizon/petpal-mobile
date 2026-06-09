@@ -8,6 +8,7 @@ import {
   PawMatchConversation,
   PawMatchMessage,
   SwipeResult,
+  AdoptionInterestResult,
   CreatePawMatchProfileRequest,
 } from '../types';
 
@@ -19,6 +20,7 @@ const unwrapApiData = <T>(payload: unknown): T => {
 interface PawMatchState {
   activeMode: MatchMode | null;
   candidates: Partial<Record<MatchMode, PawMatchProfile[]>>;
+  seenCandidateIds: Partial<Record<MatchMode, string[]>>;
   matches: PawMatch[];
   profiles: Record<string, PawMatchProfile[]>; // petId → profiles
   conversations: Record<string, PawMatchConversation>; // matchId → conversation
@@ -31,13 +33,18 @@ interface PawMatchState {
   updateProfile: (profileId: string, data: Partial<CreatePawMatchProfileRequest>) => Promise<void>;
   deleteProfile: (profileId: string) => Promise<void>;
   fetchCandidates: (petId: string, mode: MatchMode, filters?: Record<string, string | number>) => Promise<void>;
+  fetchAdoptionCandidates: (filters?: Record<string, string | number>) => Promise<void>;
   removeTopCandidate: (mode: MatchMode) => void;
   swipe: (fromProfileId: string, toProfileId: string, mode: MatchMode, direction: SwipeDirection) => Promise<SwipeResult>;
+  requestAdoptionChat: (toProfileId: string) => Promise<AdoptionInterestResult>;
   fetchMatches: (petId: string, mode?: MatchMode) => Promise<void>;
   unmatch: (matchId: string) => Promise<void>;
   fetchConversation: (matchId: string) => Promise<void>;
   sendMessage: (matchId: string, senderPetId: string, content?: string, mediaUrl?: string) => Promise<PawMatchMessage>;
+  acceptAdoptionRequest: (conversationId: string) => Promise<void>;
+  declineAdoptionRequest: (conversationId: string) => Promise<void>;
   clearError: () => void;
+  reset: () => void;
 }
 
 export const usePawMatchStore = create<PawMatchState>((set, get) => ({
@@ -46,6 +53,7 @@ export const usePawMatchStore = create<PawMatchState>((set, get) => ({
   matches: [],
   profiles: {},
   conversations: {},
+  seenCandidateIds: {},
   isLoading: false,
   error: null,
 
@@ -127,10 +135,35 @@ export const usePawMatchStore = create<PawMatchState>((set, get) => ({
     }
   },
 
+  fetchAdoptionCandidates: async (filters = {}) => {
+    set({ isLoading: true, error: null });
+    try {
+      const params = new URLSearchParams({ mode: 'ADOPT', ...Object.fromEntries(Object.entries(filters).map(([k, v]) => [k, String(v)])) });
+      const res = await api.get(`/pawmatch/candidates?${params}`);
+      const candidates = unwrapApiData<PawMatchProfile[]>(res.data);
+      set((s) => {
+        const seenIds = new Set(s.seenCandidateIds.ADOPT ?? []);
+        return {
+          candidates: { ...s.candidates, ADOPT: candidates.filter((candidate) => !seenIds.has(candidate.id)) },
+          isLoading: false,
+        };
+      });
+    } catch (e: unknown) {
+      set({ error: (e as { message?: string }).message ?? 'Failed to load adoption candidates', isLoading: false });
+    }
+  },
+
   removeTopCandidate: (mode) => {
     set((s) => {
       const current = s.candidates[mode] ?? [];
-      return { candidates: { ...s.candidates, [mode]: current.slice(1) } };
+      const topCandidateId = current[0]?.id;
+      const seenForMode = s.seenCandidateIds[mode] ?? [];
+      return {
+        candidates: { ...s.candidates, [mode]: current.slice(1) },
+        seenCandidateIds: topCandidateId
+          ? { ...s.seenCandidateIds, [mode]: [...new Set([...seenForMode, topCandidateId])] }
+          : s.seenCandidateIds,
+      };
     });
   },
 
@@ -148,6 +181,17 @@ export const usePawMatchStore = create<PawMatchState>((set, get) => ({
           get().fetchMatches(callerProfile.petId).catch(() => {});
         }
       }
+      return result;
+    } catch (e: unknown) {
+      throw e;
+    }
+  },
+
+  requestAdoptionChat: async (toProfileId) => {
+    try {
+      const res = await api.post('/pawmatch/adoption-interest', { toProfileId });
+      const result = unwrapApiData<AdoptionInterestResult>(res.data);
+      get().removeTopCandidate('ADOPT');
       return result;
     } catch (e: unknown) {
       throw e;
@@ -224,5 +268,41 @@ export const usePawMatchStore = create<PawMatchState>((set, get) => ({
     }
   },
 
+  acceptAdoptionRequest: async (conversationId) => {
+    try {
+      await api.patch(`/pawmatch/conversations/${conversationId}/accept`);
+      // Update conversation status in local state
+      set((s) => ({
+        conversations: Object.fromEntries(
+          Object.entries(s.conversations).map(([matchId, conv]) =>
+            conv?.id === conversationId
+              ? [matchId, { ...conv, status: 'ACTIVE' as const }]
+              : [matchId, conv]
+          )
+        ),
+      }));
+    } catch (e: unknown) {
+      throw e;
+    }
+  },
+
+  declineAdoptionRequest: async (conversationId) => {
+    try {
+      await api.patch(`/pawmatch/conversations/${conversationId}/decline`);
+      set((s) => ({
+        conversations: Object.fromEntries(
+          Object.entries(s.conversations).map(([matchId, conv]) =>
+            conv?.id === conversationId
+              ? [matchId, { ...conv, status: 'DECLINED' as const }]
+              : [matchId, conv]
+          )
+        ),
+      }));
+    } catch (e: unknown) {
+      throw e;
+    }
+  },
+
   clearError: () => set({ error: null }),
+  reset: () => set({ activeMode: null, candidates: {}, matches: [], profiles: {}, conversations: {}, seenCandidateIds: {}, isLoading: false, error: null }),
 }));

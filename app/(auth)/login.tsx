@@ -14,6 +14,7 @@ import { Colors } from '../../constants/colors';
 import { Button } from '../../components/ui/Button';
 import { Input } from '../../components/ui/Input';
 import { useAuthStore } from '../../store/authStore';
+import { PawRokLogo } from '../../components/ui/PawRokLogo';
 
 export default function LoginScreen() {
   const router = useRouter();
@@ -62,9 +63,9 @@ export default function LoginScreen() {
       >
         {/* Header */}
         <View style={styles.header}>
-          <Text style={styles.logo}>🐾</Text>
+          <PawRokLogo size={72} />
           <Text style={styles.title}>Welcome back</Text>
-          <Text style={styles.subtitle}>Sign in to your PetPal account</Text>
+          <Text style={styles.subtitle}>Sign in to your PawRok account</Text>
         </View>
 
         {/* Form */}
@@ -146,10 +147,6 @@ const styles = StyleSheet.create({
   header: {
     alignItems: 'center',
     gap: 8,
-  },
-  logo: {
-    fontSize: 56,
-    marginBottom: 8,
   },
   title: {
     fontSize: 28,

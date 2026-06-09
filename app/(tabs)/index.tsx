@@ -1,4 +1,4 @@
-import React, { useEffect, useCallback, useMemo, useState } from 'react';
+import React, { useEffect, useCallback, useMemo, useState, useRef } from 'react';
 import {
   View,
   Text,
@@ -12,6 +12,7 @@ import {
 import { useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { Plus, Bell, BellOff, SlidersHorizontal, MapPin, Navigation } from 'lucide-react-native';
+import { PawRokLogo } from '../../components/ui/PawRokLogo';
 import { Colors } from '../../constants/colors';
 import { AlertCard } from '../../components/community/AlertCard';
 import { StoryFeedCard } from '../../components/community/StoryFeedCard';
@@ -49,7 +50,10 @@ function CommunityHeader({ router, showCreate, onCreatePress }: {
 }) {
   return (
     <View style={styles.header}>
-      <Text style={styles.headerTitle}>Community</Text>
+      <View style={styles.headerBrand}>
+        <PawRokLogo size={36} />
+        <Text style={styles.headerTitle}>PawRok</Text>
+      </View>
       <View style={styles.headerActions}>
         <TouchableOpacity style={styles.headerIconBtn} onPress={() => router.push('/notifications')}>
           <Bell size={20} color={Colors.textPrimary} />
@@ -67,17 +71,19 @@ function CommunityHeader({ router, showCreate, onCreatePress }: {
 export default function CommunityScreen() {
   const router = useRouter();
   const { 
-    alerts, 
-    fetchAlerts, 
+    alerts,
+    fetchAlerts,
     fetchMoreAlerts,
-    isLoading, 
+    isLoading,
     isLoadingMore,
-    activeFilters, 
-    events, 
-    fetchEvents, 
-    diaryFeed, 
+    activeFilters,
+    events,
+    fetchEvents,
+    diaryFeed,
     fetchDiaryFeed,
     fetchMoreDiaryFeed,
+    alertsPage,
+    hasMoreAlerts,
   } = useCommunityStore();
   const {
     coordinates,
@@ -89,9 +95,26 @@ export default function CommunityScreen() {
   } = useLocation();
 
   const { pets } = usePetStore();
-  const [activeTab, setActiveTab]     = useState('all');
-  const [refreshing, setRefreshing]   = useState(false);
+  const [activeTab, setActiveTab]             = useState('all');
+  const [refreshing, setRefreshing]           = useState(false);
   const [showCreateSheet, setShowCreateSheet] = useState(false);
+  const [effectiveRadius, setEffectiveRadius] = useState<number | null>(null);
+  const [visibleItemKey, setVisibleItemKey]   = useState<string | null>(null);
+  // Refs so renderItem reads current values without needing them as deps (prevents React.memo bust)
+  const visibleItemKeyRef = useRef<string | null>(null);
+  const filterCountRef    = useRef(0);
+  const activeTabRef      = useRef('all');
+
+  // Must be stable refs — FlatList re-registers if these change
+  const viewabilityConfig = useRef({ itemVisiblePercentThreshold: 50 }).current;
+  const onViewableItemsChanged = useRef(
+    ({ viewableItems }: { viewableItems: Array<{ key: string }> }) => {
+      const first = viewableItems.find((i) => i.key.startsWith('story-'));
+      const key = first?.key ?? null;
+      visibleItemKeyRef.current = key;
+      setVisibleItemKey(key);
+    }
+  ).current;
 
   useEffect(() => {
     getCurrentLocation();
@@ -106,17 +129,46 @@ export default function CommunityScreen() {
     longitude: coordinates?.longitude,
   }), [activeFilters, activeTab, coordinates]);
 
-  const load = useCallback(() => {
-    if (coordinates) {
-      fetchAlerts(mergedFilters, 1, 20);
-      fetchDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25, 1, 20);
-      fetchEvents();
+  const RADIUS_STEPS = [10, 30, 50, 100];
+
+  const load = useCallback(async () => {
+    if (!coordinates) return;
+    setEffectiveRadius(null);
+
+    // If the user has set a custom radius, use only that (no auto-expand)
+    const userRadius = activeFilters.radiusKm;
+    const steps = userRadius ? [userRadius] : RADIUS_STEPS;
+
+    for (const radius of steps) {
+      const filters = { ...mergedFilters, radiusKm: radius };
+      await Promise.all([
+        fetchAlerts(filters, 1, 20),
+        fetchDiaryFeed(coordinates.latitude, coordinates.longitude, radius, 1, 20),
+      ]);
+      const { alerts: a, diaryFeed: d } = useCommunityStore.getState();
+      if (a.length > 0 || d.length > 0) {
+        if (!userRadius && radius !== RADIUS_STEPS[0]) {
+          setEffectiveRadius(radius);
+        }
+        break;
+      }
     }
+    fetchEvents();
   }, [fetchAlerts, fetchDiaryFeed, fetchEvents, mergedFilters, coordinates, activeFilters.radiusKm]);
 
   useEffect(() => {
     if (coordinates) load();
   }, [load, coordinates]);
+
+  // Background prefetch: silently load page 2 after page 1 renders so "load more" feels instant
+  useEffect(() => {
+    if (alerts.length >= 20 && alertsPage === 1 && hasMoreAlerts && !isLoadingMore && coordinates) {
+      const timer = setTimeout(() => {
+        fetchMoreAlerts({ ...mergedFilters, radiusKm: effectiveRadius ?? activeFilters.radiusKm ?? 10 });
+      }, 2500);
+      return () => clearTimeout(timer);
+    }
+  }, [alerts.length, alertsPage, hasMoreAlerts]);
 
   // Build and sort the unified feed
   const unifiedFeed = useMemo((): FeedItem[] => {
@@ -137,15 +189,8 @@ export default function CommunityScreen() {
   const handleRefresh = async () => {
     setRefreshing(true);
     try {
-      // Only refresh data with existing coordinates - don't re-fetch location
-      // Location is already obtained on mount, no need to re-fetch on every refresh
       if (coordinates) {
-        // Reset pagination to page 1 on refresh
-        await Promise.all([
-          fetchAlerts(mergedFilters, 1, 20),
-          fetchDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25, 1, 20),
-          fetchEvents(),
-        ]);
+        await load(); // reuses auto-expand logic + resets effectiveRadius
       }
     } finally {
       setRefreshing(false);
@@ -163,19 +208,22 @@ export default function CommunityScreen() {
   };
 
   const handleLoadMore = useCallback(() => {
+    if (isLoadingMore) return; // guard: don't double-trigger
+    // Use the radius that found results (effectiveRadius) so load-more pages are consistent
+    const radius = effectiveRadius ?? activeFilters.radiusKm ?? 10;
     if (activeTab === 'diaries') {
-      if (coordinates) fetchMoreDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25);
+      if (coordinates) fetchMoreDiaryFeed(coordinates.latitude, coordinates.longitude, radius);
     } else if (activeTab === 'events') {
       // Events are loaded in full — no pagination
     } else {
       // 'all', 'lost', 'found': load more alerts
-      fetchMoreAlerts(mergedFilters);
+      fetchMoreAlerts({ ...mergedFilters, radiusKm: radius });
       // In 'all' tab also load more diaries so the merged feed stays balanced
       if (activeTab === 'all' && coordinates) {
-        fetchMoreDiaryFeed(coordinates.latitude, coordinates.longitude, activeFilters.radiusKm ?? 25);
+        fetchMoreDiaryFeed(coordinates.latitude, coordinates.longitude, radius);
       }
     }
-  }, [activeTab, coordinates, fetchMoreAlerts, fetchMoreDiaryFeed, mergedFilters, activeFilters.radiusKm]);
+  }, [isLoadingMore, effectiveRadius, activeTab, coordinates, fetchMoreAlerts, fetchMoreDiaryFeed, mergedFilters, activeFilters.radiusKm]);
 
   const filterCount = useMemo(() => {
     let n = 0;
@@ -184,8 +232,12 @@ export default function CommunityScreen() {
     if (activeFilters.dateRange && activeFilters.dateRange !== 'any') n++;
     if (activeFilters.sortBy === 'nearest')                    n++;
     if (activeFilters.radiusKm && activeFilters.radiusKm !== 10) n++;
+    filterCountRef.current = n;
     return n;
   }, [activeFilters]);
+
+  // Keep activeTab ref in sync
+  useEffect(() => { activeTabRef.current = activeTab; }, [activeTab]);
 
   const listData = useMemo<CommunityListItem[]>(() => {
     const feedRows: CommunityListItem[] = unifiedFeed.map((item) => {
@@ -215,26 +267,34 @@ export default function CommunityScreen() {
         <View>
           <CommunityHeader router={router} showCreate onCreatePress={() => setShowCreateSheet(true)} />
           <MatchStories />
+          {effectiveRadius !== null && (
+            <View style={styles.radiusNotice}>
+              <Text style={styles.radiusNoticeText}>
+                No posts nearby — showing results within {effectiveRadius} km
+              </Text>
+            </View>
+          )}
         </View>
       );
     }
 
     if (item.kind === 'tabs') {
+      const fc = filterCountRef.current;
       return (
         <View style={styles.tabsContainer}>
           <View style={styles.tabsPill}>
-            <Tabs tabs={TABS} activeTab={activeTab} onTabChange={setActiveTab} />
+            <Tabs tabs={TABS} activeTab={activeTabRef.current} onTabChange={setActiveTab} />
           </View>
           <TouchableOpacity
             style={styles.filterBtn}
             onPress={() => router.push('/community/filter')}
           >
-            {filterCount > 0 && (
+            {fc > 0 && (
               <View style={styles.filterBadge}>
-                <Text style={styles.filterBadgeText}>{filterCount}</Text>
+                <Text style={styles.filterBadgeText}>{fc}</Text>
               </View>
             )}
-            <SlidersHorizontal size={18} color={filterCount > 0 ? Colors.primary : Colors.textSecondary} />
+            <SlidersHorizontal size={18} color={fc > 0 ? Colors.primary : Colors.textSecondary} />
           </TouchableOpacity>
         </View>
       );
@@ -254,19 +314,23 @@ export default function CommunityScreen() {
       );
     }
 
-    if (item.kind === 'story' && item.story) {
+    if (item.kind === 'story') {
+      if (!item.story) return null;
+      const itemKey = 'story-' + item.story.id;
       return (
         <View style={styles.alertItem}>
           <StoryFeedCard
             entry={item.story}
             userLatitude={coordinates?.latitude}
             userLongitude={coordinates?.longitude}
+            isActive={visibleItemKeyRef.current === itemKey}
           />
         </View>
       );
     }
 
-    if (item.kind === 'event' && item.event) {
+    if (item.kind === 'event') {
+      if (!item.event) return null;
       return (
         <View style={styles.alertItem}>
           <EventFeedCard event={item.event} />
@@ -286,7 +350,8 @@ export default function CommunityScreen() {
         />
       </View>
     );
-  }, [activeTab, filterCount, coordinates, router]);
+  // activeTab and filterCount are read via refs — no deps needed for them
+  }, [coordinates, router, effectiveRadius, setShowCreateSheet]);
 
   // ── Location permission gate ──────────────────────────────────────────────
   if (!locationLoading && !hasPermission && !coordinates) {
@@ -299,7 +364,7 @@ export default function CommunityScreen() {
           </View>
           <Text style={styles.permissionTitle}>Location Required</Text>
           <Text style={styles.permissionBody}>
-            PetPal uses your location to show lost pets, found animals, and community alerts within 10 km of you. Your location is never shared publicly.
+            PawRok uses your location to show lost pets, found animals, and community alerts within 10 km of you. Your location is never shared publicly.
           </Text>
           <TouchableOpacity style={styles.permissionBtn} onPress={handleEnableLocation}>
             <Navigation size={16} color={Colors.surface} />
@@ -346,7 +411,10 @@ export default function CommunityScreen() {
   }
 
   // ── Main screen ───────────────────────────────────────────────────────────
-  if (isLoading && alerts.length === 0) {
+  // Stale-while-revalidate: only show full spinner on truly empty first load.
+  // If the store already has data from a previous visit, render immediately and
+  // let the background refresh stream in new content.
+  if (isLoading && alerts.length === 0 && diaryFeed.length === 0 && events.length === 0) {
     return <Loading fullScreen />;
   }
 
@@ -359,6 +427,8 @@ return (
           if (item.kind === 'alert') return 'alert-' + item.alert.id;
           if (item.kind === 'story') return 'story-' + item.story?.id;
           if (item.kind === 'event') return 'event-' + item.event?.id;
+          // 'tabs' key includes activeTab so the cell is remounted on tab switch
+          if (item.kind === 'tabs') return 'tabs-' + activeTab;
           return item.kind;
         }}
         contentContainerStyle={styles.list}
@@ -367,12 +437,16 @@ return (
           <RefreshControl refreshing={refreshing} onRefresh={handleRefresh} tintColor={Colors.primary} />
         }
         onEndReached={handleLoadMore}
-        onEndReachedThreshold={0.5}
+        onEndReachedThreshold={0.3}
         ListFooterComponent={renderListFooter}
         contentInsetAdjustmentBehavior="never"
         removeClippedSubviews={true}
-        maxToRenderPerBatch={10}
-        updateCellsBatchingPeriod={50}
+        windowSize={5}
+        initialNumToRender={6}
+        maxToRenderPerBatch={5}
+        updateCellsBatchingPeriod={80}
+        onViewableItemsChanged={onViewableItemsChanged}
+        viewabilityConfig={viewabilityConfig}
         renderItem={renderItem}
       />
 
@@ -409,10 +483,16 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     borderBottomColor: Colors.border,
   },
+  headerBrand: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
   headerTitle: {
     fontSize: 26,
     fontWeight: '800',
-    color: Colors.textPrimary,
+    color: Colors.primary,
+    letterSpacing: -0.5,
   },
   headerActions: {
     flexDirection: 'row',
@@ -426,6 +506,18 @@ const styles = StyleSheet.create({
     backgroundColor: Colors.neutral100,
     alignItems: 'center',
     justifyContent: 'center',
+  },
+  radiusNotice: {
+    backgroundColor: Colors.secondaryBg,
+    paddingHorizontal: 16,
+    paddingVertical: 8,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    borderBottomColor: Colors.border,
+  },
+  radiusNoticeText: {
+    fontSize: 12,
+    color: Colors.textSecondary,
+    textAlign: 'center',
   },
   headerCreateBtn: {
     width: 38,
@@ -531,8 +623,7 @@ const styles = StyleSheet.create({
     paddingBottom: 100,
   },
   alertItem: {
-    paddingHorizontal: 20,
-    marginBottom: 12,
+    marginBottom: 8,
   },
   emptyWrap: {
     paddingHorizontal: 20,

@@ -2,6 +2,8 @@ import { create } from 'zustand';
 import api from '../lib/api';
 import { saveTokens, clearTokens, getTokens } from '../lib/storage';
 import { User, LoginRequest, RegisterRequest, AuthResponse, ResetPasswordRequest } from '../types';
+import { useChatStore } from './chatStore';
+import { usePawMatchStore } from './pawmatchStore';
 
 const extractAuthPayload = (responseData: unknown): AuthResponse => {
   const payload = (responseData as { data?: unknown })?.data ?? responseData;
@@ -84,11 +86,11 @@ export const useAuthStore = create<AuthState>((set, get) => ({
   logout: async () => {
     set({ isLoading: true });
     try {
-      await api.post('/auth/logout').catch(() => {
-        // Ignore logout API errors - clear local state anyway
-      });
+      await api.post('/auth/logout').catch(() => {});
     } finally {
       await clearTokens();
+      useChatStore.getState().reset();
+      usePawMatchStore.getState().reset();
       set({ user: null, isAuthenticated: false, isLoading: false, error: null });
     }
   },

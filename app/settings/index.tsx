@@ -76,7 +76,7 @@ export default function SettingsScreen() {
   const handleDeleteAccount = () => {
     Alert.alert(
       'Delete Account',
-      'This will permanently delete your account and related PetPal data. This action cannot be undone.',
+      'This will permanently delete your account and related PawRok data. This action cannot be undone.',
       [
         { text: 'Cancel', style: 'cancel' },
         {

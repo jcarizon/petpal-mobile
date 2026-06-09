@@ -10,20 +10,29 @@ import {
   Alert,
   KeyboardAvoidingView,
   Platform,
+  Image,
+  ActivityIndicator,
+  Dimensions,
 } from 'react-native';
 import { useLocalSearchParams, useRouter } from 'expo-router';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { Sparkles, Check } from 'lucide-react-native';
+import * as ImagePicker from 'expo-image-picker';
+import { Sparkles, Check, ImageIcon, Video, X } from 'lucide-react-native';
 import { Colors } from '../../../../constants/colors';
 import { Button } from '../../../../components/ui/Button';
 import { ImageUploader, ScreenHeader, useToast } from '../../../../components/ui';
 import { usePetStore } from '../../../../store/petStore';
+import { uploadImage } from '../../../../lib/uploadImage';
 import { DiaryMood, DiaryActivity, DiaryVisibility, CreateDiaryRequest } from '../../../../types';
+import { DiaryVideo } from '../../../../components/pet/DiaryVideo';
+import { StoryVideoPreviewModal } from '../../../../components/diary/StoryVideoPreviewModal';
+
+const W = Dimensions.get('window').width;
 
 const VISIBILITY_OPTIONS: { value: DiaryVisibility; label: string; desc: string }[] = [
   { value: 'PRIVATE',      label: 'Private',      desc: 'Only me' },
-  { value: 'PUBLIC',       label: 'Story Entry',  desc: 'Posted to community feed' },
-  { value: 'MATCHES_ONLY', label: 'Matches',      desc: 'Only my PawMatch matches' },
+  { value: 'PUBLIC',       label: 'Public', desc: 'Posted to community feed' },
+  { value: 'MATCHES_ONLY', label: 'Story',  desc: 'Shared to story circles'   },
 ];
 
 const moodOptions: { value: DiaryMood; label: string; emoji: string; color: string }[] = [
@@ -69,7 +78,11 @@ export default function AddDiaryScreen() {
   const [mood, setMood] = useState<DiaryMood | undefined>(undefined);
   const [activity, setActivity] = useState<DiaryActivity | undefined>(undefined);
   const [imageUrl, setImageUrl] = useState<string | undefined>();
+  const [videoUrl, setVideoUrl] = useState<string | undefined>();
+  const [videoName, setVideoName] = useState<string | undefined>();
   const [isUploading, setIsUploading] = useState(false);
+  const [pendingVideoUri, setPendingVideoUri] = useState<string | undefined>();
+  const [mediaType, setMediaType] = useState<'photo' | 'video'>('photo');
   const [showQuickFill, setShowQuickFill] = useState(false);
   const [visibility, setVisibility] = useState<DiaryVisibility>(
     paramVisibility === 'PUBLIC' || paramVisibility === 'MATCHES_ONLY'
@@ -77,6 +90,102 @@ export default function AddDiaryScreen() {
       : 'PRIVATE'
   );
   const [shareAsStory, setShareAsStory] = useState(false);
+  const [storyOrientation, setStoryOrientation] = useState<'portrait' | 'landscape'>('portrait');
+
+  const handleChangeOrientation = (next: 'portrait' | 'landscape') => {
+    if (next === storyOrientation) return;
+    if (imageUrl || videoUrl) {
+      Alert.alert(
+        'Change Orientation',
+        'Your media was cropped for the previous orientation and will be removed. Continue?',
+        [
+          { text: 'Cancel', style: 'cancel' },
+          {
+            text: 'Continue',
+            onPress: () => {
+              setStoryOrientation(next);
+              setImageUrl(undefined);
+              setVideoUrl(undefined);
+              setVideoName(undefined);
+              setPendingVideoUri(undefined);
+            },
+          },
+        ]
+      );
+    } else {
+      setStoryOrientation(next);
+    }
+  };
+
+  const handlePickVideo = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Allow access to your media library to upload a video.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Videos,
+      allowsEditing: false,
+      videoMaxDuration: 120,
+      quality: 0.8,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    const asset = result.assets[0];
+    if (shareAsStory || visibility === 'MATCHES_ONLY') {
+      setPendingVideoUri(asset.uri);
+      return;
+    }
+    setIsUploading(true);
+    try {
+      const url = await uploadImage(asset.uri, { folder: 'diaries' });
+      setVideoUrl(url);
+      setVideoName(asset.fileName ?? 'video.mp4');
+    } catch {
+      showToast({ type: 'warning', title: 'Video upload failed', message: 'Entry will be saved without a video.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handlePickStoryPhoto = async () => {
+    const { status } = await ImagePicker.requestMediaLibraryPermissionsAsync();
+    if (status !== 'granted') {
+      Alert.alert('Permission required', 'Allow access to your media library.');
+      return;
+    }
+    const result = await ImagePicker.launchImageLibraryAsync({
+      mediaTypes: ImagePicker.MediaTypeOptions.Images,
+      allowsEditing: true,
+      aspect: storyOrientation === 'landscape' ? [16, 9] : [9, 16],
+      quality: 0.85,
+    });
+    if (result.canceled || !result.assets[0]) return;
+    setIsUploading(true);
+    try {
+      const url = await uploadImage(result.assets[0].uri, { folder: 'diaries' });
+      setImageUrl(url);
+    } catch {
+      showToast({ type: 'warning', title: 'Photo upload failed', message: 'Entry will be saved without a photo.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
+
+  const handleConfirmVideoPreview = async () => {
+    if (!pendingVideoUri) return;
+    const uri = pendingVideoUri;
+    setPendingVideoUri(undefined);
+    setIsUploading(true);
+    try {
+      const url = await uploadImage(uri, { folder: 'diaries' });
+      setVideoUrl(url);
+      setVideoName('video.mp4');
+    } catch {
+      showToast({ type: 'warning', title: 'Video upload failed', message: 'Entry will be saved without a video.' });
+    } finally {
+      setIsUploading(false);
+    }
+  };
 
   const handleQuickFill = () => {
     if (mood) {
@@ -110,14 +219,17 @@ export default function AddDiaryScreen() {
     }
 
     try {
+      const isStory = shareAsStory || visibility === 'MATCHES_ONLY';
       const diaryData: CreateDiaryRequest = {
         title: title.trim(),
         content: content.trim(),
         mood,
         activity,
-        imageUrl,
+        imageUrl: mediaType === 'photo' ? imageUrl : undefined,
+        videoUrl: mediaType === 'video' ? videoUrl : undefined,
         visibility,
         shareAsStory,
+        storyOrientation: isStory ? storyOrientation : undefined,
       };
       await createDiary(id!, diaryData);
       router.back();
@@ -229,28 +341,135 @@ export default function AddDiaryScreen() {
             />
           </View>
 
-          {/* Photo */}
+          {/* Media — Photo or Video */}
           <View style={styles.inputGroup}>
-            <Text style={styles.label}>Add Photo (Optional)</Text>
-            <ImageUploader
-              value={imageUrl}
-              onChange={setImageUrl}
-              folder="diaries"
-              shape="rect"
-              width="100%"
-              height={160}
-              onUploadStart={() => setIsUploading(true)}
-              onUploadEnd={(err) => {
-                setIsUploading(false);
-                if (err) {
-                  showToast({
-                    type: 'warning',
-                    title: 'Photo upload failed',
-                    message: 'Entry will be saved without a photo.',
-                  });
-                }
-              }}
-            />
+            <Text style={styles.label}>Add Media (Optional)</Text>
+
+            {/* Type toggle */}
+            <View style={styles.mediaToggleRow}>
+              <TouchableOpacity
+                style={[styles.mediaToggleBtn, mediaType === 'photo' && styles.mediaToggleBtnActive]}
+                onPress={() => { setMediaType('photo'); setVideoUrl(undefined); setVideoName(undefined); }}
+              >
+                <ImageIcon size={16} color={mediaType === 'photo' ? Colors.primary : Colors.textSecondary} />
+                <Text style={[styles.mediaToggleText, mediaType === 'photo' && styles.mediaToggleTextActive]}>Photo</Text>
+              </TouchableOpacity>
+              <TouchableOpacity
+                style={[styles.mediaToggleBtn, mediaType === 'video' && styles.mediaToggleBtnActive]}
+                onPress={() => { setMediaType('video'); setImageUrl(undefined); }}
+              >
+                <Video size={16} color={mediaType === 'video' ? Colors.primary : Colors.textSecondary} />
+                <Text style={[styles.mediaToggleText, mediaType === 'video' && styles.mediaToggleTextActive]}>Video</Text>
+              </TouchableOpacity>
+            </View>
+
+            {/* Orientation toggle — only for story posts */}
+            {(shareAsStory || visibility === 'MATCHES_ONLY') && (
+              <View style={styles.orientationRow}>
+                <TouchableOpacity
+                  style={[styles.orientationBtn, storyOrientation === 'portrait' && styles.orientationBtnActive]}
+                  onPress={() => handleChangeOrientation('portrait')}
+                >
+                  <Text style={[styles.orientationText, storyOrientation === 'portrait' && styles.orientationTextActive]}>
+                    Portrait (9:16)
+                  </Text>
+                </TouchableOpacity>
+                <TouchableOpacity
+                  style={[styles.orientationBtn, storyOrientation === 'landscape' && styles.orientationBtnActive]}
+                  onPress={() => handleChangeOrientation('landscape')}
+                >
+                  <Text style={[styles.orientationText, storyOrientation === 'landscape' && styles.orientationTextActive]}>
+                    Landscape (16:9)
+                  </Text>
+                </TouchableOpacity>
+              </View>
+            )}
+
+            {mediaType === 'photo' ? (
+              (shareAsStory || visibility === 'MATCHES_ONLY') ? (
+                imageUrl ? (
+                  <View style={styles.storyPhotoCard}>
+                    {isUploading ? (
+                      <View style={styles.storyPhotoThumb}>
+                        <ActivityIndicator color={Colors.primary} />
+                      </View>
+                    ) : (
+                      <Image source={{ uri: imageUrl }} style={styles.storyPhotoThumb} resizeMode="cover" />
+                    )}
+                    <View style={styles.storyPhotoCardBody}>
+                      <Text style={styles.label}>Story Photo</Text>
+                      <Text style={styles.storyPhotoCardSub}>Portrait crop (9:16) applied</Text>
+                      <View style={styles.storyPhotoCardActions}>
+                        <TouchableOpacity
+                          style={styles.storyPhotoCardBtn}
+                          onPress={handlePickStoryPhoto}
+                          disabled={isUploading}
+                        >
+                          <Text style={styles.storyPhotoCardBtnText}>Replace</Text>
+                        </TouchableOpacity>
+                        <TouchableOpacity
+                          style={[styles.storyPhotoCardBtn, styles.storyPhotoCardBtnRemove]}
+                          onPress={() => setImageUrl(undefined)}
+                          disabled={isUploading}
+                        >
+                          <Text style={[styles.storyPhotoCardBtnText, styles.storyPhotoCardBtnRemoveText]}>Remove</Text>
+                        </TouchableOpacity>
+                      </View>
+                    </View>
+                  </View>
+                ) : isUploading ? (
+                  <View style={styles.videoUploading}>
+                    <ActivityIndicator color={Colors.primary} size="large" />
+                    <Text style={styles.videoUploadingText}>Uploading photo…</Text>
+                  </View>
+                ) : (
+                  <TouchableOpacity style={styles.videoPicker} onPress={handlePickStoryPhoto}>
+                    <View style={styles.videoPickerEmpty}>
+                      <ImageIcon size={28} color={Colors.neutral400} />
+                      <Text style={styles.videoPickerText}>Pick Story Photo</Text>
+                      <Text style={styles.videoPickerSub}>Will be cropped to portrait (9:16)</Text>
+                    </View>
+                  </TouchableOpacity>
+                )
+              ) : (
+                <ImageUploader
+                  value={imageUrl}
+                  onChange={setImageUrl}
+                  folder="diaries"
+                  shape="rect"
+                  width="100%"
+                  height={160}
+                  onUploadStart={() => setIsUploading(true)}
+                  onUploadEnd={(err) => {
+                    setIsUploading(false);
+                    if (err) showToast({ type: 'warning', title: 'Photo upload failed', message: 'Entry will be saved without a photo.' });
+                  }}
+                />
+              )
+            ) : isUploading ? (
+              <View style={styles.videoUploading}>
+                <ActivityIndicator color={Colors.primary} size="large" />
+                <Text style={styles.videoUploadingText}>Uploading video…</Text>
+              </View>
+            ) : videoUrl ? (
+              <View style={styles.videoPreviewWrap}>
+                <DiaryVideo uri={videoUrl} height={Math.round((W - 40) * 0.6)} />
+                <TouchableOpacity
+                  style={styles.videoRemoveBtn}
+                  onPress={() => { setVideoUrl(undefined); setVideoName(undefined); }}
+                >
+                  <X size={14} color="#fff" />
+                </TouchableOpacity>
+              </View>
+            ) : (
+              <TouchableOpacity style={styles.videoPicker} onPress={handlePickVideo}>
+                <View style={styles.videoPickerEmpty}>
+                  <Video size={28} color={Colors.neutral400} />
+                  <Text style={styles.videoPickerText}>Tap to pick a video</Text>
+                  <Text style={styles.videoPickerSub}>Max 2 minutes · MP4 or MOV</Text>
+                </View>
+              </TouchableOpacity>
+            )}
           </View>
 
           {/* Visibility */}
@@ -330,6 +549,15 @@ export default function AddDiaryScreen() {
           </View>
         </ScrollView>
       </KeyboardAvoidingView>
+
+      <StoryVideoPreviewModal
+        visible={!!pendingVideoUri}
+        uri={pendingVideoUri ?? ''}
+        orientation={storyOrientation}
+        onOrientationChange={setStoryOrientation}
+        onConfirm={handleConfirmVideoPreview}
+        onCancel={() => setPendingVideoUri(undefined)}
+      />
     </SafeAreaView>
   );
 }
@@ -430,6 +658,19 @@ const styles = StyleSheet.create({
   activityLabel: { fontSize: 13, color: Colors.textSecondary, fontWeight: '600' },
   activityLabelSelected: { color: Colors.surface },
   buttonContainer: { marginTop: 8, marginBottom: 32 },
+  mediaToggleRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  mediaToggleBtn: { flex: 1, flexDirection: 'row', alignItems: 'center', justifyContent: 'center', gap: 6, paddingVertical: 9, borderRadius: 10, backgroundColor: Colors.neutral100, borderWidth: 1.5, borderColor: 'transparent' },
+  mediaToggleBtnActive: { backgroundColor: Colors.primaryBg, borderColor: Colors.primary },
+  mediaToggleText: { fontSize: 13, fontWeight: '600', color: Colors.textSecondary },
+  mediaToggleTextActive: { color: Colors.primary },
+  videoPicker: { backgroundColor: Colors.surface, borderRadius: 12, borderWidth: 1.5, borderColor: Colors.border, borderStyle: 'dashed', minHeight: 100, justifyContent: 'center', alignItems: 'center', padding: 16 },
+  videoPickerEmpty: { alignItems: 'center', gap: 6 },
+  videoPickerText: { fontSize: 14, fontWeight: '600', color: Colors.textSecondary },
+  videoPickerSub: { fontSize: 12, color: Colors.textDisabled },
+  videoUploading: { height: 100, justifyContent: 'center', alignItems: 'center', gap: 10, backgroundColor: Colors.neutral100, borderRadius: 12 },
+  videoUploadingText: { fontSize: 13, color: Colors.textSecondary },
+  videoPreviewWrap: { borderRadius: 12, overflow: 'hidden', position: 'relative' },
+  videoRemoveBtn: { position: 'absolute', top: 8, right: 8, width: 28, height: 28, borderRadius: 14, backgroundColor: 'rgba(0,0,0,0.55)', justifyContent: 'center', alignItems: 'center' },
   storyToggleRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginBottom: 24, paddingVertical: 4 },
   storyToggleText: { flex: 1, marginRight: 12 },
   storyToggleDesc: { fontSize: 12, color: Colors.textDisabled, marginTop: 2 },
@@ -443,6 +684,34 @@ const styles = StyleSheet.create({
   visibilityChipLabelActive: { color: Colors.primary },
   visibilityChipDesc: { fontSize: 11, color: Colors.textDisabled, marginTop: 2 },
   visibilityChipDescActive: { color: Colors.primaryDark },
+  orientationRow: { flexDirection: 'row', gap: 8, marginBottom: 12 },
+  orientationBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 10, alignItems: 'center',
+    borderWidth: 1.5, borderColor: Colors.border, backgroundColor: Colors.surface,
+  },
+  orientationBtnActive: { borderColor: Colors.primary, backgroundColor: Colors.primaryBg },
+  orientationText: { fontSize: 12, fontWeight: '600', color: Colors.textSecondary },
+  orientationTextActive: { color: Colors.primary },
+  storyPhotoCard: {
+    flexDirection: 'row', gap: 12, alignItems: 'center',
+    backgroundColor: Colors.surface, borderRadius: 12,
+    borderWidth: 1.5, borderColor: Colors.border, padding: 12,
+  },
+  storyPhotoThumb: {
+    width: 72, height: 128, borderRadius: 8,
+    backgroundColor: Colors.neutral100, overflow: 'hidden',
+    justifyContent: 'center', alignItems: 'center',
+  },
+  storyPhotoCardBody: { flex: 1 },
+  storyPhotoCardSub: { fontSize: 12, color: Colors.textSecondary, marginTop: 2, marginBottom: 12 },
+  storyPhotoCardActions: { flexDirection: 'row', gap: 8 },
+  storyPhotoCardBtn: {
+    flex: 1, paddingVertical: 8, borderRadius: 8, alignItems: 'center',
+    borderWidth: 1.5, borderColor: Colors.border,
+  },
+  storyPhotoCardBtnRemove: { borderColor: '#DC2626' },
+  storyPhotoCardBtnText: { fontSize: 12, fontWeight: '700', color: Colors.textSecondary },
+  storyPhotoCardBtnRemoveText: { color: '#DC2626' },
   quickFillModalOverlay: {
     ...StyleSheet.absoluteFillObject,
     justifyContent: 'center',

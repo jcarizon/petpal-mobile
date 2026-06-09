@@ -4,6 +4,7 @@ import { useRouter } from 'expo-router';
 import { Colors } from '../../constants/colors';
 import { useAuthStore } from '../../store/authStore';
 import { isOnboardingComplete } from '../../lib/storage';
+import { PawRokLogo } from '../../components/ui/PawRokLogo';
 
 export default function SplashScreen() {
   const router = useRouter();
@@ -56,8 +57,8 @@ export default function SplashScreen() {
           },
         ]}
       >
-        <Text style={styles.logo}>🐾</Text>
-        <Text style={styles.appName}>PetPal</Text>
+        <PawRokLogo size={140} />
+        <Text style={styles.appName}>PawRok</Text>
         <Text style={styles.tagline}>Your pet's health companion</Text>
       </Animated.View>
     </View>
@@ -67,27 +68,23 @@ export default function SplashScreen() {
 const styles = StyleSheet.create({
   container: {
     flex: 1,
-    backgroundColor: Colors.primary,
+    backgroundColor: Colors.surface,
     alignItems: 'center',
     justifyContent: 'center',
   },
   logoContainer: {
     alignItems: 'center',
-    gap: 8,
-  },
-  logo: {
-    fontSize: 80,
-    marginBottom: 8,
+    gap: 12,
   },
   appName: {
     fontSize: 40,
     fontWeight: '800',
-    color: Colors.textInverse,
+    color: Colors.primary,
     letterSpacing: 1,
   },
   tagline: {
     fontSize: 16,
-    color: 'rgba(255,255,255,0.85)',
+    color: Colors.textSecondary,
     fontWeight: '500',
   },
 });

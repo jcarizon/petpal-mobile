@@ -1,4 +1,4 @@
-# PetPal Mobile 🐾
+# PawRok Mobile 🐾
 
 A production-ready React Native Expo mobile application for pet health management, community alerts, and local services discovery.
 
@@ -123,16 +123,16 @@ npx tsc --noEmit
 |----------|-------------|---------|
 | `EXPO_PUBLIC_API_URL` | Backend API URL | `http://localhost:3000/api` |
 | `EXPO_PUBLIC_CLOUDINARY_CLOUD_NAME` | Cloudinary cloud name | - |
-| `EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Cloudinary upload preset | `petpal_uploads` |
+| `EXPO_PUBLIC_CLOUDINARY_UPLOAD_PRESET` | Cloudinary upload preset | `pawrok_uploads` |
 | `EXPO_PUBLIC_DEFAULT_RADIUS_KM` | Default search radius | `5` |
 | `EXPO_PUBLIC_REMINDER_DAYS_BEFORE` | Days before reminder fires | `3` |
 
 ## 📋 Deep Linking
 
-The app supports deep linking via `petpal://` scheme:
-- `petpal://alert/:id` → Alert detail screen
-- `petpal://pet/:id` → Pet detail screen
-- `petpal://profile` → Profile screen (badges)
+The app supports deep linking via `pawrok://` scheme:
+- `pawrok://alert/:id` → Alert detail screen
+- `pawrok://pet/:id` → Pet detail screen
+- `pawrok://profile` → Profile screen (badges)
 
 ## 🏆 Badge System
 
@@ -143,7 +143,7 @@ The app supports deep linking via `petpal://` scheme:
 | Rescue Star | Report lost/found pet |
 | Vet Regular | Add 3+ vet visit records |
 | Community Guard | Post 5+ sightings |
-| PetPal Elite | Reach Level 10 |
+| PawRok Elite | Reach Level 10 |
 
 ## 📊 Health Score Calculation
 
