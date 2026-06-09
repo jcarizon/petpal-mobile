@@ -11,5 +11,4 @@ build/
 web-build/
 .env
 .DS_Store
-google-services.json
 google-service-account-key.json

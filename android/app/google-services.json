@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "924888698585",
+    "project_id": "pawrok-6a279",
+    "storage_bucket": "pawrok-6a279.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:924888698585:android:8bc7e70e15f13e6430f8c8",
+        "android_client_info": {
+          "package_name": "com.pawrok.mobile"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCKTg8di8fpcStQO5nT1dypiPxGbgT2Ssc"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
